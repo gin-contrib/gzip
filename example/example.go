@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/gin-gonic/contrib/gzip"
+	"github.com/gin-contrib/gzip"
 	"gopkg.in/gin-gonic/gin.v1"
 	"time"
 )
