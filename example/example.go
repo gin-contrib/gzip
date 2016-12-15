@@ -2,9 +2,10 @@ package main
 
 import (
 	"fmt"
-	"github.com/gin-contrib/gzip"
-	"gopkg.in/gin-gonic/gin.v1"
 	"time"
+
+	"github.com/gin-gonic/contrib/gzip"
+	"gopkg.in/gin-gonic/gin.v1"
 )
 
 func main() {

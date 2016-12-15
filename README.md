@@ -9,3 +9,43 @@
 Gin middleware to enable `GZIP` support.
 
 ## Usage
+
+### Start using it
+
+Download and install it:
+
+```sh
+$ go get github.com/gin-contrib/gzip
+```
+
+Import it in your code:
+
+```go
+import "github.com/gin-contrib/gzip"
+```
+
+### Canonical example:
+
+```go
+package main
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/gin-gonic/contrib/gzip"
+	"gopkg.in/gin-gonic/gin.v1"
+)
+
+func main() {
+	r := gin.Default()
+	r.Use(gzip.Gzip(gzip.DefaultCompression))
+	r.GET("/ping", func(c *gin.Context) {
+		c.String(200, "pong "+fmt.Sprint(time.Now().Unix()))
+	})
+
+	// Listen and Server in 0.0.0.0:8080
+	r.Run(":8080")
+}
+
+```
