@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/gin-contrib/gzip"
-	"gopkg.in/gin-gonic/gin.v1"
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
