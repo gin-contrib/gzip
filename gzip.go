@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/gin-gonic/gin.v1"
+	"gopkg.in/gin-gonic/gin.v1"
 )
 
 const (
