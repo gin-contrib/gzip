@@ -34,7 +34,7 @@ import (
 	"time"
 
 	"github.com/gin-contrib/gzip"
-	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin.v1"
 )
 
 func main() {
