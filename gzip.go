@@ -2,6 +2,7 @@ package gzip
 
 import (
 	"compress/gzip"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"path/filepath"
@@ -40,8 +41,8 @@ func Gzip(level int) gin.HandlerFunc {
 		c.Header("Vary", "Accept-Encoding")
 		c.Writer = &gzipWriter{c.Writer, gz}
 		defer func() {
-			c.Header("Content-Length", "0")
 			gz.Close()
+			c.Header("Content-Length", fmt.Sprint(c.Writer.Size()))
 		}()
 		c.Next()
 	}
