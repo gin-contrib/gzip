@@ -2,6 +2,7 @@ package gzip
 
 import (
 	"compress/gzip"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -39,6 +40,7 @@ func TestGzip(t *testing.T) {
 	assert.Equal(t, w.Header().Get("Vary"), "Accept-Encoding")
 	assert.NotEqual(t, w.Header().Get("Content-Length"), "0")
 	assert.NotEqual(t, w.Body.Len(), 19)
+	assert.Equal(t, fmt.Sprint(w.Body.Len()), w.Header().Get("Content-Length"))
 
 	gr, err := gzip.NewReader(w.Body)
 	assert.NoError(t, err)
