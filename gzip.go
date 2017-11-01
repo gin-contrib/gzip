@@ -62,9 +62,12 @@ func (g *gzipWriter) Write(data []byte) (int, error) {
 }
 
 func shouldCompress(req *http.Request) bool {
-	if !strings.Contains(req.Header.Get("Accept-Encoding"), "gzip") {
+	if !strings.Contains(req.Header.Get("Accept-Encoding"), "gzip") ||
+		strings.Contains(req.Header.Get("Connection"), "Upgrade") {
+
 		return false
 	}
+
 	extension := filepath.Ext(req.URL.Path)
 	if len(extension) < 4 { // fast path
 		return true
