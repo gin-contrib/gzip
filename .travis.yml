@@ -17,7 +17,7 @@ matrix:
     env: GO111MODULE=on
 
 install:
-  - if [[ "${GO111MODULE}" = "on" ]]; then go mod download; else go get -v ./...; fi
+  - if [[ "${GO111MODULE}" = "on" ]]; then go mod download; else go get -t -v ./...; fi
 
 script:
   - go test -v -covermode=atomic -coverprofile=coverage.out
