@@ -20,6 +20,15 @@ const (
 	NoCompression      = gzip.NoCompression
 )
 
+// Gzip returns a Gin handler that implements transparent gzip
+// compression of the response.
+//
+// Gzip expects two parameter:
+//   - level: the compression level. One of BestCompression, BestSpeed,
+//     DefaultCompression, or NoCompression
+//   - minLength: the minimal response length in bytes that is required
+//     in order to actually compress the response. Disable it by setting it
+//     to 0.
 func Gzip(level, minLength int) gin.HandlerFunc {
 	var gzPool sync.Pool
 	gzPool.New = func() interface{} {
@@ -69,8 +78,13 @@ type gzipWriter struct {
 	gin.ResponseWriter
 	writer *gzip.Writer
 
+	// Buffer to store partial response
 	buffer    bytes.Buffer
+
+	// Minimal length of buffer before content will be compressed
 	minLength int
+
+	// Whether the response should be compressed
 	compress  bool
 }
 
