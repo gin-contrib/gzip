@@ -39,7 +39,7 @@ import (
 
 func main() {
 	r := gin.Default()
-	r.Use(gzip.Gzip(gzip.DefaultCompression))
+	r.Use(gzip.Gzip(gzip.DefaultCompression, 0))
 	r.GET("/ping", func(c *gin.Context) {
 		c.String(200, "pong "+fmt.Sprint(time.Now().Unix()))
 	})
