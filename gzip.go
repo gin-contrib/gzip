@@ -35,6 +35,7 @@ func Gzip(level int) gin.HandlerFunc {
 
 		gz := gzPool.Get().(*gzip.Writer)
 		defer gzPool.Put(gz)
+		defer gz.Reset(ioutil.Discard)
 		gz.Reset(c.Writer)
 
 		c.Header("Content-Encoding", "gzip")
@@ -70,7 +71,7 @@ func (g *gzipWriter) WriteHeader(code int) {
 func shouldCompress(req *http.Request) bool {
 	if !strings.Contains(req.Header.Get("Accept-Encoding"), "gzip") ||
 		strings.Contains(req.Header.Get("Connection"), "Upgrade") ||
-	        strings.Contains(req.Header.Get("Content-Type"), "text/event-stream") {
+		strings.Contains(req.Header.Get("Content-Type"), "text/event-stream") {
 
 		return false
 	}
