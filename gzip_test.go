@@ -130,6 +130,26 @@ func TestExcludedExtensions(t *testing.T) {
 	assert.Equal(t, "", w.Header().Get("Content-Length"))
 }
 
+func TestExcludedPaths(t *testing.T) {
+	req, _ := http.NewRequest("GET", "/api/books", nil)
+	req.Header.Add("Accept-Encoding", "gzip")
+
+	router := gin.New()
+	router.Use(Gzip(DefaultCompression, WithExcludedPaths([]string{"/api/"})))
+	router.GET("/api/books", func(c *gin.Context) {
+		c.String(200, "this is books!")
+	})
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "", w.Header().Get("Content-Encoding"))
+	assert.Equal(t, "", w.Header().Get("Vary"))
+	assert.Equal(t, "this is books!", w.Body.String())
+	assert.Equal(t, "", w.Header().Get("Content-Length"))
+}
+
 func TestNoGzip(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/", nil)
 
