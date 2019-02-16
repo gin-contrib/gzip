@@ -13,10 +13,11 @@ import (
 )
 
 type gzipHandler struct {
+	*Options
 	gzPool sync.Pool
 }
 
-func newGzipHandler(level int) *gzipHandler {
+func newGzipHandler(level int, options ...Option) *gzipHandler {
 	var gzPool sync.Pool
 	gzPool.New = func() interface{} {
 		gz, err := gzip.NewWriterLevel(ioutil.Discard, level)
@@ -26,7 +27,11 @@ func newGzipHandler(level int) *gzipHandler {
 		return gz
 	}
 	handler := &gzipHandler{
-		gzPool: gzPool,
+		Options: DefaultOptions,
+		gzPool:  gzPool,
+	}
+	for _, setter := range options {
+		setter(handler.Options)
 	}
 	return handler
 }
@@ -60,14 +65,5 @@ func (g *gzipHandler) shouldCompress(req *http.Request) bool {
 	}
 
 	extension := filepath.Ext(req.URL.Path)
-	if len(extension) < 4 { // fast path
-		return true
-	}
-
-	switch extension {
-	case ".png", ".gif", ".jpeg", ".jpg":
-		return false
-	default:
-		return true
-	}
+	return !g.ExcludedExtensions.Contains(extension)
 }

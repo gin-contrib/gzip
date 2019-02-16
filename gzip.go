@@ -13,8 +13,8 @@ const (
 	NoCompression      = gzip.NoCompression
 )
 
-func Gzip(level int) gin.HandlerFunc {
-	return newGzipHandler(level).Handle
+func Gzip(level int, options ...Option) gin.HandlerFunc {
+	return newGzipHandler(level, options...).Handle
 }
 
 type gzipWriter struct {
