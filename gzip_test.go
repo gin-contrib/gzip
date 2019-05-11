@@ -50,16 +50,20 @@ func (c *closeNotifyingRecorder) CloseNotify() <-chan bool {
 	return c.closed
 }
 
-func newServer() *gin.Engine {
+func newServer(minLength int) *gin.Engine {
 	// init reverse proxy server
 	rServer := httptest.NewServer(new(rServer))
 	target, _ := url.Parse(rServer.URL)
 	rp := httputil.NewSingleHostReverseProxy(target)
 
 	router := gin.New()
-	router.Use(Gzip(DefaultCompression))
+	router.Use(Gzip(DefaultCompression, minLength))
 	router.GET("/", func(c *gin.Context) {
 		c.Header("Content-Length", strconv.Itoa(len(testResponse)))
+		c.String(200, testResponse)
+	})
+	router.GET("/minlengthbuffer", func(c *gin.Context) {
+		c.String(200, testResponse)
 		c.String(200, testResponse)
 	})
 	router.Any("/reverse", func(c *gin.Context) {
@@ -73,14 +77,14 @@ func TestGzip(t *testing.T) {
 	req.Header.Add("Accept-Encoding", "gzip")
 
 	w := httptest.NewRecorder()
-	r := newServer()
+	r := newServer(0)
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, w.Code, 200)
 	assert.Equal(t, w.Header().Get("Content-Encoding"), "gzip")
 	assert.Equal(t, w.Header().Get("Vary"), "Accept-Encoding")
 	assert.NotEqual(t, w.Header().Get("Content-Length"), "0")
-	assert.NotEqual(t, w.Body.Len(), 19)
+	assert.NotEqual(t, w.Body.Len(), len(testResponse))
 	assert.Equal(t, fmt.Sprint(w.Body.Len()), w.Header().Get("Content-Length"))
 
 	gr, err := gzip.NewReader(w.Body)
@@ -91,12 +95,54 @@ func TestGzip(t *testing.T) {
 	assert.Equal(t, string(body), testResponse)
 }
 
+func TestGzipMinLengthNoBuffer(t *testing.T) {
+	req, _ := http.NewRequest("GET", "/", nil)
+	req.Header.Add("Accept-Encoding", "gzip")
+
+	w := httptest.NewRecorder()
+	r := newServer(100)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, w.Code, 200)
+	assert.NotEqual(t, w.Header().Get("Content-Encoding"), "gzip")
+	assert.NotEqual(t, w.Header().Get("Vary"), "Accept-Encoding")
+	assert.NotEqual(t, w.Header().Get("Content-Length"), "0")
+	assert.Equal(t, w.Body.Len(), len(testResponse))
+	assert.Equal(t, fmt.Sprint(w.Body.Len()), w.Header().Get("Content-Length"))
+
+	body, _ := ioutil.ReadAll(w.Body)
+	assert.Equal(t, string(body), testResponse)
+}
+
+func TestGzipMinLengthBuffer(t *testing.T) {
+	req, _ := http.NewRequest("GET", "/minlengthbuffer", nil)
+	req.Header.Add("Accept-Encoding", "gzip")
+
+	w := httptest.NewRecorder()
+	r := newServer(len(testResponse) + 1)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, w.Code, 200)
+	assert.Equal(t, w.Header().Get("Content-Encoding"), "gzip")
+	assert.Equal(t, w.Header().Get("Vary"), "Accept-Encoding")
+	assert.NotEqual(t, w.Header().Get("Content-Length"), "0")
+	assert.NotEqual(t, w.Body.Len(), 2*len(testResponse))
+	assert.Equal(t, fmt.Sprint(w.Body.Len()), w.Header().Get("Content-Length"))
+
+	gr, err := gzip.NewReader(w.Body)
+	assert.NoError(t, err)
+	defer gr.Close()
+
+	body, _ := ioutil.ReadAll(gr)
+	assert.Equal(t, string(body), testResponse + testResponse)
+}
+
 func TestGzipPNG(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/image.png", nil)
 	req.Header.Add("Accept-Encoding", "gzip")
 
 	router := gin.New()
-	router.Use(Gzip(DefaultCompression))
+	router.Use(Gzip(DefaultCompression, 0))
 	router.GET("/image.png", func(c *gin.Context) {
 		c.String(200, "this is a PNG!")
 	})
@@ -114,7 +160,7 @@ func TestNoGzip(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/", nil)
 
 	w := httptest.NewRecorder()
-	r := newServer()
+	r := newServer(0)
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, w.Code, 200)
@@ -128,14 +174,14 @@ func TestGzipWithReverseProxy(t *testing.T) {
 	req.Header.Add("Accept-Encoding", "gzip")
 
 	w := newCloseNotifyingRecorder()
-	r := newServer()
+	r := newServer(0)
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, w.Code, 200)
 	assert.Equal(t, w.Header().Get("Content-Encoding"), "gzip")
 	assert.Equal(t, w.Header().Get("Vary"), "Accept-Encoding")
 	assert.NotEqual(t, w.Header().Get("Content-Length"), "0")
-	assert.NotEqual(t, w.Body.Len(), 19)
+	assert.NotEqual(t, w.Body.Len(), len(testReverseResponse))
 	assert.Equal(t, fmt.Sprint(w.Body.Len()), w.Header().Get("Content-Length"))
 
 	gr, err := gzip.NewReader(w.Body)
@@ -145,3 +191,23 @@ func TestGzipWithReverseProxy(t *testing.T) {
 	body, _ := ioutil.ReadAll(gr)
 	assert.Equal(t, string(body), testReverseResponse)
 }
+
+func TestGzipMinLengthWithReverseProxy(t *testing.T) {
+	req, _ := http.NewRequest("GET", "/reverse", nil)
+	req.Header.Add("Accept-Encoding", "gzip")
+
+	w := newCloseNotifyingRecorder()
+	r := newServer(100)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, w.Code, 200)
+	assert.NotEqual(t, w.Header().Get("Content-Encoding"), "gzip")
+	assert.NotEqual(t, w.Header().Get("Vary"), "Accept-Encoding")
+	assert.NotEqual(t, w.Header().Get("Content-Length"), "0")
+	assert.Equal(t, w.Body.Len(), len(testReverseResponse))
+	assert.Equal(t, fmt.Sprint(w.Body.Len()), w.Header().Get("Content-Length"))
+
+	body, _ := ioutil.ReadAll(w.Body)
+	assert.Equal(t, string(body), testReverseResponse)
+}
+
