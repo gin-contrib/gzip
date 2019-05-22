@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/gin-gonic/gin"
+	"gopkg.in/gin-gonic/gin.v1"
 )
 
 const (
@@ -39,6 +39,7 @@ func Gzip(level int) gin.HandlerFunc {
 		gz.Reset(c.Writer)
 
 		c.Header("Content-Encoding", "gzip")
+		c.Header("Content-Type", "text/html; charset=UTF-8")
 		c.Header("Vary", "Accept-Encoding")
 		c.Writer = &gzipWriter{c.Writer, gz}
 		defer func() {
@@ -82,7 +83,7 @@ func shouldCompress(req *http.Request) bool {
 	}
 
 	switch extension {
-	case ".png", ".gif", ".jpeg", ".jpg":
+	case ".png", ".gif", ".jpeg", ".jpg", ".css", ".js":
 		return false
 	default:
 		return true
