@@ -55,10 +55,12 @@ type gzipWriter struct {
 }
 
 func (g *gzipWriter) WriteString(s string) (int, error) {
+	g.Header().Del("Content-Length")
 	return g.writer.Write([]byte(s))
 }
 
 func (g *gzipWriter) Write(data []byte) (int, error) {
+	g.Header().Del("Content-Length")
 	return g.writer.Write(data)
 }
 
@@ -66,6 +68,11 @@ func (g *gzipWriter) Write(data []byte) (int, error) {
 func (g *gzipWriter) WriteHeader(code int) {
 	g.Header().Del("Content-Length")
 	g.ResponseWriter.WriteHeader(code)
+}
+
+func (g *gzipWriter) WriteHeaderNow() {
+	g.Header().Del("Content-Length")
+	g.ResponseWriter.WriteHeaderNow()
 }
 
 func shouldCompress(req *http.Request) bool {
