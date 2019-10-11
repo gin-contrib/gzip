@@ -224,3 +224,39 @@ func TestDecompressGzip(t *testing.T) {
 	assert.Equal(t, testResponse, w.Body.String())
 	assert.Equal(t, "", w.Header().Get("Content-Length"))
 }
+
+func TestDecompressGzipWithEmptyBody(t *testing.T) {
+	req, _ := http.NewRequest("POST", "/", nil)
+	req.Header.Add("Content-Encoding", "gzip")
+
+	router := gin.New()
+	router.Use(Gzip(DefaultCompression, WithDecompressFn(DefaultDecompressHandle)))
+	router.POST("/", func(c *gin.Context) {
+		c.String(200, "ok")
+	})
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "", w.Header().Get("Content-Encoding"))
+	assert.Equal(t, "", w.Header().Get("Vary"))
+	assert.Equal(t, "ok", w.Body.String())
+	assert.Equal(t, "", w.Header().Get("Content-Length"))
+}
+
+func TestDecompressGzipWithIncorrectData(t *testing.T) {
+	req, _ := http.NewRequest("POST", "/", bytes.NewReader([]byte(testResponse)))
+	req.Header.Add("Content-Encoding", "gzip")
+
+	router := gin.New()
+	router.Use(Gzip(DefaultCompression, WithDecompressFn(DefaultDecompressHandle)))
+	router.POST("/", func(c *gin.Context) {
+		c.String(200, "ok")
+	})
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
