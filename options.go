@@ -1,7 +1,11 @@
 package gzip
 
 import (
+	"compress/gzip"
+	"net/http"
 	"strings"
+
+	"github.com/gin-gonic/gin"
 )
 
 var (
@@ -16,6 +20,7 @@ var (
 type Options struct {
 	ExcludedExtensions ExcludedExtensions
 	ExcludedPaths      ExcludedPaths
+	DecompressFn       func(c *gin.Context)
 }
 
 type Option func(*Options)
@@ -29,6 +34,12 @@ func WithExcludedExtensions(args []string) Option {
 func WithExcludedPaths(args []string) Option {
 	return func(o *Options) {
 		o.ExcludedPaths = NewExcludedPaths(args)
+	}
+}
+
+func WithDecompressFn(decompressFn func(c *gin.Context)) Option {
+	return func(o *Options) {
+		o.DecompressFn = decompressFn
 	}
 }
 
@@ -61,4 +72,18 @@ func (e ExcludedPaths) Contains(requestURI string) bool {
 		}
 	}
 	return false
+}
+
+func DefaultDecompressHandle(c *gin.Context) {
+	if c.Request.Body == nil {
+		return
+	}
+	r, err := gzip.NewReader(c.Request.Body)
+	if err != nil {
+		c.AbortWithError(http.StatusBadRequest, err)
+		return
+	}
+	c.Request.Header.Del("Content-Encoding")
+	c.Request.Header.Del("Content-Length")
+	c.Request.Body = r
 }
