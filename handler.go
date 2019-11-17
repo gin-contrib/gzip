@@ -37,6 +37,10 @@ func newGzipHandler(level int, options ...Option) *gzipHandler {
 }
 
 func (g *gzipHandler) Handle(c *gin.Context) {
+	if fn := g.DecompressFn; fn != nil && c.Request.Header.Get("Content-Encoding") == "gzip" {
+		fn(c)
+	}
+
 	if !g.shouldCompress(c.Request) {
 		return
 	}
