@@ -73,5 +73,5 @@ func (g *gzipHandler) shouldCompress(req *http.Request) bool {
 		return false
 	}
 
-	return !g.ExcludedPaths.Contains(req.URL.Path)
+	return !g.ExcludedPaths.Contains(req.URL.Path) && !g.ExcludedPathesRegexs.Contains(req.URL.Path)
 }

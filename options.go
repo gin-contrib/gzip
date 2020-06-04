@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strings"
 
+	"regexp"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -18,9 +20,10 @@ var (
 )
 
 type Options struct {
-	ExcludedExtensions ExcludedExtensions
-	ExcludedPaths      ExcludedPaths
-	DecompressFn       func(c *gin.Context)
+	ExcludedExtensions   ExcludedExtensions
+	ExcludedPaths        ExcludedPaths
+	ExcludedPathesRegexs ExcludedPathesRegexs
+	DecompressFn         func(c *gin.Context)
 }
 
 type Option func(*Options)
@@ -34,6 +37,11 @@ func WithExcludedExtensions(args []string) Option {
 func WithExcludedPaths(args []string) Option {
 	return func(o *Options) {
 		o.ExcludedPaths = NewExcludedPaths(args)
+	}
+}
+func WithExcludedPathsRegexs(args []string) Option {
+	return func(o *Options) {
+		o.ExcludedPathesRegexs = NewExcludedPathesRegexs(args)
 	}
 }
 
@@ -68,6 +76,24 @@ func NewExcludedPaths(paths []string) ExcludedPaths {
 func (e ExcludedPaths) Contains(requestURI string) bool {
 	for _, path := range e {
 		if strings.HasPrefix(requestURI, path) {
+			return true
+		}
+	}
+	return false
+}
+
+type ExcludedPathesRegexs []*regexp.Regexp
+
+func NewExcludedPathesRegexs(regexs []string) ExcludedPathesRegexs {
+	result := make([]*regexp.Regexp, len(regexs), len(regexs))
+	for i, reg := range regexs {
+		result[i] = regexp.MustCompile(reg)
+	}
+	return result
+}
+func (e ExcludedPathesRegexs) Contains(requestURI string) bool {
+	for _, reg := range e {
+		if reg.MatchString(requestURI) {
 			return true
 		}
 	}
