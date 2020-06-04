@@ -3,9 +3,8 @@ package gzip
 import (
 	"compress/gzip"
 	"net/http"
-	"strings"
-
 	"regexp"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -39,6 +38,7 @@ func WithExcludedPaths(args []string) Option {
 		o.ExcludedPaths = NewExcludedPaths(args)
 	}
 }
+
 func WithExcludedPathsRegexs(args []string) Option {
 	return func(o *Options) {
 		o.ExcludedPathesRegexs = NewExcludedPathesRegexs(args)
@@ -91,6 +91,7 @@ func NewExcludedPathesRegexs(regexs []string) ExcludedPathesRegexs {
 	}
 	return result
 }
+
 func (e ExcludedPathesRegexs) Contains(requestURI string) bool {
 	for _, reg := range e {
 		if reg.MatchString(requestURI) {
