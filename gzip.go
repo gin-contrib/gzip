@@ -23,10 +23,12 @@ type gzipWriter struct {
 }
 
 func (g *gzipWriter) WriteString(s string) (int, error) {
+	g.Header().Del("Content-Length")
 	return g.writer.Write([]byte(s))
 }
 
 func (g *gzipWriter) Write(data []byte) (int, error) {
+	g.Header().Del("Content-Length")
 	return g.writer.Write(data)
 }
 
