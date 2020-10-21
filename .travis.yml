@@ -11,6 +11,21 @@ jobs:
   - go: 1.14.x
   - go: 1.15.x
   - go: master
+    # Adding jobs for ppc64le arch
+  - go: 1.11.x
+    arch: ppc64le
+    env: GO111MODULE=on
+  - go: 1.12.x
+    arch: ppc64le
+    env: GO111MODULE=on
+  - go: 1.13.x
+    arch: ppc64le
+  - go: 1.14.x
+    arch: ppc64le
+  - go: 1.15.x
+    arch: ppc64le
+  - go: master
+    arch: ppc64le
 
 install:
   - if [[ "${GO111MODULE}" = "on" ]]; then go mod download; else go get -t -v ./...; fi
@@ -28,3 +43,4 @@ notifications:
     on_success: change
     on_failure: always
     on_start: never
+
