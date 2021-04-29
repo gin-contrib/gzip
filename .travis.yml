@@ -10,6 +10,7 @@ jobs:
   - go: 1.13.x
   - go: 1.14.x
   - go: 1.15.x
+  - go: 1.16.x
   - go: master
     # Adding jobs for ppc64le arch
   - go: 1.11.x
@@ -23,6 +24,8 @@ jobs:
   - go: 1.14.x
     arch: ppc64le
   - go: 1.15.x
+    arch: ppc64le
+  - go: 1.16.x
     arch: ppc64le
   - go: master
     arch: ppc64le
