@@ -3,6 +3,7 @@ package gzip
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -20,10 +21,6 @@ const (
 	testResponse        = "Gzip Test Response "
 	testReverseResponse = "Gzip Test Reverse Response "
 )
-
-func init() {
-	gin.SetMode(gin.ReleaseMode)
-}
 
 type rServer struct{}
 
@@ -66,7 +63,7 @@ func newServer() *gin.Engine {
 }
 
 func TestGzip(t *testing.T) {
-	req, _ := http.NewRequest("GET", "/", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/", nil)
 	req.Header.Add("Accept-Encoding", "gzip")
 
 	w := httptest.NewRecorder()
@@ -89,7 +86,7 @@ func TestGzip(t *testing.T) {
 }
 
 func TestGzipPNG(t *testing.T) {
-	req, _ := http.NewRequest("GET", "/image.png", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/image.png", nil)
 	req.Header.Add("Accept-Encoding", "gzip")
 
 	router := gin.New()
@@ -108,7 +105,7 @@ func TestGzipPNG(t *testing.T) {
 }
 
 func TestExcludedExtensions(t *testing.T) {
-	req, _ := http.NewRequest("GET", "/index.html", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/index.html", nil)
 	req.Header.Add("Accept-Encoding", "gzip")
 
 	router := gin.New()
@@ -128,7 +125,7 @@ func TestExcludedExtensions(t *testing.T) {
 }
 
 func TestExcludedPaths(t *testing.T) {
-	req, _ := http.NewRequest("GET", "/api/books", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/api/books", nil)
 	req.Header.Add("Accept-Encoding", "gzip")
 
 	router := gin.New()
@@ -148,7 +145,7 @@ func TestExcludedPaths(t *testing.T) {
 }
 
 func TestNoGzip(t *testing.T) {
-	req, _ := http.NewRequest("GET", "/", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/", nil)
 
 	w := httptest.NewRecorder()
 	r := newServer()
@@ -161,7 +158,7 @@ func TestNoGzip(t *testing.T) {
 }
 
 func TestGzipWithReverseProxy(t *testing.T) {
-	req, _ := http.NewRequest("GET", "/reverse", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/reverse", nil)
 	req.Header.Add("Accept-Encoding", "gzip")
 
 	w := newCloseNotifyingRecorder()
@@ -192,7 +189,7 @@ func TestDecompressGzip(t *testing.T) {
 	}
 	gz.Close()
 
-	req, _ := http.NewRequest("POST", "/", buf)
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/", buf)
 	req.Header.Add("Content-Encoding", "gzip")
 
 	router := gin.New()
@@ -222,7 +219,7 @@ func TestDecompressGzip(t *testing.T) {
 }
 
 func TestDecompressGzipWithEmptyBody(t *testing.T) {
-	req, _ := http.NewRequest("POST", "/", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/", nil)
 	req.Header.Add("Content-Encoding", "gzip")
 
 	router := gin.New()
@@ -242,7 +239,7 @@ func TestDecompressGzipWithEmptyBody(t *testing.T) {
 }
 
 func TestDecompressGzipWithIncorrectData(t *testing.T) {
-	req, _ := http.NewRequest("POST", "/", bytes.NewReader([]byte(testResponse)))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/", bytes.NewReader([]byte(testResponse)))
 	req.Header.Add("Content-Encoding", "gzip")
 
 	router := gin.New()
