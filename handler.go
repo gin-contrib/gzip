@@ -45,11 +45,14 @@ func (g *gzipHandler) Handle(c *gin.Context) {
 		return
 	}
 
+	if c.Writer.Header().Get("Content-Encoding") == "gzip" {
+		return
+	}
+
 	gz := g.gzPool.Get().(*gzip.Writer)
 	defer g.gzPool.Put(gz)
 	defer gz.Reset(ioutil.Discard)
 	gz.Reset(c.Writer)
-
 	c.Header("Content-Encoding", "gzip")
 	c.Header("Vary", "Accept-Encoding")
 	c.Writer = &gzipWriter{c.Writer, gz}
