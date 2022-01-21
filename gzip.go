@@ -30,7 +30,7 @@ func (g *gzipWriter) WriteString(s string) (int, error) {
 
 func (g *gzipWriter) Write(data []byte) (int, error) {
 	g.gzipped = g.isGzipped(data) || g.gzipped
-	if g.isGzipped(data) {
+	if g.gzipped {
 		return g.ResponseWriter.Write(data)
 	}
 
