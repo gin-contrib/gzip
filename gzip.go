@@ -19,7 +19,8 @@ func Gzip(level int, options ...Option) gin.HandlerFunc {
 
 type gzipWriter struct {
 	gin.ResponseWriter
-	writer *gzip.Writer
+	writer  *gzip.Writer
+	gzipped bool
 }
 
 func (g *gzipWriter) WriteString(s string) (int, error) {
@@ -28,10 +29,13 @@ func (g *gzipWriter) WriteString(s string) (int, error) {
 }
 
 func (g *gzipWriter) Write(data []byte) (int, error) {
-	if isGzipped(data) {
+	g.gzipped = g.isGzipped(data) || g.gzipped
+	if g.isGzipped(data) {
 		return g.ResponseWriter.Write(data)
 	}
 
+	g.Header().Set("Content-Encoding", "gzip")
+	g.Header().Set("Vary", "Accept-Encoding")
 	g.Header().Del("Content-Length")
 	return g.writer.Write(data)
 }
@@ -42,7 +46,7 @@ func (g *gzipWriter) WriteHeader(code int) {
 	g.ResponseWriter.WriteHeader(code)
 }
 
-func isGzipped(input []byte) bool {
+func (g *gzipWriter) isGzipped(input []byte) bool {
 	if len(input) < 2 {
 		return false
 	}
