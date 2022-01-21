@@ -42,6 +42,8 @@ func (g *gzipWriter) Write(data []byte) (int, error) {
 
 // Fix: https://github.com/mholt/caddy/issues/38
 func (g *gzipWriter) WriteHeader(code int) {
+	g.Header().Set("Content-Encoding", "gzip")
+	g.Header().Set("Vary", "Accept-Encoding")
 	g.Header().Del("Content-Length")
 	g.ResponseWriter.WriteHeader(code)
 }
