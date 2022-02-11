@@ -1,0 +1,19 @@
+name: Review
+
+on:
+  pull_request:
+    branches:
+      - 'master'
+
+defaults:
+  run:
+    working-directory: .
+
+jobs:
+  idk:
+    runs-on: ubuntu-latest
+    name: Terraform Lint and Plan
+    steps:
+      - uses: actions/checkout@v2
+      - uses: ubuntu
+        run: echo "maaan idk"
