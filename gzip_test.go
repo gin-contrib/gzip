@@ -11,6 +11,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -102,6 +103,89 @@ func TestGzipPNG(t *testing.T) {
 	assert.Equal(t, w.Header().Get("Content-Encoding"), "")
 	assert.Equal(t, w.Header().Get("Vary"), "")
 	assert.Equal(t, w.Body.String(), "this is a PNG!")
+}
+
+func TestMatchSupportedRequests(t *testing.T) {
+	router := gin.New()
+	router.Use(
+		Gzip(DefaultCompression,
+			WithMatchSupportedRequestFn(func(req *http.Request) (bool, bool) {
+				xheader := req.Header.Get("X-Test-Header")
+				if xheader == "" {
+					return false, false
+				}
+
+				ok, supported := strings.HasPrefix(xheader, "+"), strings.HasSuffix(xheader, "compress me")
+				return ok, supported
+			}),
+			// For testing the precedence order
+			WithExcludedExtensions([]string{".php"}),
+			WithExcludedPaths([]string{"/api/"}),
+		))
+	router.GET("/index.html", func(c *gin.Context) {
+		c.String(200, "this is a HTML!")
+	})
+
+	t.Run("Is Compressed/matched header's value", func(t *testing.T) {
+		req, _ := http.NewRequestWithContext(context.Background(), "GET", "/index.html", nil)
+		req.Header.Add("Accept-Encoding", "gzip")
+		req.Header.Add("X-Test-Header", "+compress me")
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, w.Code, 200)
+		assert.Equal(t, w.Header().Get("Content-Encoding"), "gzip")
+		assert.Equal(t, w.Header().Get("Vary"), "Accept-Encoding")
+		assert.NotEqual(t, w.Header().Get("Content-Length"), "0")
+		assert.NotEqual(t, w.Body.Len(), 19)
+		assert.Equal(t, fmt.Sprint(w.Body.Len()), w.Header().Get("Content-Length"))
+	})
+
+	t.Run("Is Compressed/no header", func(t *testing.T) {
+		req, _ := http.NewRequestWithContext(context.Background(), "GET", "/index.html", nil)
+		req.Header.Add("Accept-Encoding", "gzip")
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, w.Code, 200)
+		assert.Equal(t, w.Header().Get("Content-Encoding"), "gzip")
+		assert.Equal(t, w.Header().Get("Vary"), "Accept-Encoding")
+		assert.NotEqual(t, w.Header().Get("Content-Length"), "0")
+		assert.NotEqual(t, w.Body.Len(), 19)
+		assert.Equal(t, fmt.Sprint(w.Body.Len()), w.Header().Get("Content-Length"))
+	})
+
+	t.Run("Is Not Compressed/no match", func(t *testing.T) {
+		req, _ := http.NewRequestWithContext(context.Background(), "GET", "/index.html", nil)
+		req.Header.Add("Accept-Encoding", "gzip")
+		req.Header.Add("X-Test-Header", "+skip me")
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "", w.Header().Get("Content-Encoding"))
+		assert.Equal(t, "", w.Header().Get("Vary"))
+		assert.Equal(t, "this is a HTML!", w.Body.String())
+		assert.Equal(t, "", w.Header().Get("Content-Length"))
+	})
+
+	t.Run("Is Not Compressed/Precedence over Exclusion rules", func(t *testing.T) {
+		req, _ := http.NewRequestWithContext(context.Background(), "GET", "/index.html", nil)
+		req.Header.Add("Accept-Encoding", "gzip")
+		req.Header.Add("X-Test-Header", "+compressme")
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "", w.Header().Get("Content-Encoding"))
+		assert.Equal(t, "", w.Header().Get("Vary"))
+		assert.Equal(t, "this is a HTML!", w.Body.String())
+		assert.Equal(t, "", w.Header().Get("Content-Length"))
+	})
 }
 
 func TestExcludedExtensions(t *testing.T) {
