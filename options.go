@@ -22,7 +22,7 @@ type Options struct {
 	ExcludedExtensions   ExcludedExtensions
 	ExcludedPaths        ExcludedPaths
 	ExcludedPathesRegexs ExcludedPathesRegexs
-	DecompressFn         func(c *gin.Context)
+	DecompressFn         func(c *gin.Context) (before, after int)
 }
 
 type Option func(*Options)
@@ -45,7 +45,7 @@ func WithExcludedPathsRegexs(args []string) Option {
 	}
 }
 
-func WithDecompressFn(decompressFn func(c *gin.Context)) Option {
+func WithDecompressFn(decompressFn func(c *gin.Context) (int, int)) Option {
 	return func(o *Options) {
 		o.DecompressFn = decompressFn
 	}

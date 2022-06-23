@@ -3,13 +3,22 @@ package gzipfork
 import (
 	"compress/gzip"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"path/filepath"
 	"strings"
 	"sync"
 
+	"github.com/elephant-insurance/go-microservice-arch/v2/clicker"
 	"github.com/gin-gonic/gin"
+)
+
+var (
+	CompressedBytes      = &clicker.Clicker{}
+	UncompressedBytes    = &clicker.Clicker{}
+	CompressedRequests   = &clicker.Clicker{}
+	UncompressedRequests = &clicker.Clicker{}
 )
 
 type gzipHandler struct {
@@ -37,8 +46,13 @@ func newGzipHandler(level int, options ...Option) *gzipHandler {
 }
 
 func (g *gzipHandler) Handle(c *gin.Context) {
-	if fn := g.DecompressFn; fn != nil && c.Request.Header.Get("Content-Encoding") == "gzip" {
-		fn(c)
+	if fn := g.DecompressFn; fn != nil && g.shouldDecompress(c) {
+		before, after := fn(c)
+		CompressedBytes.Click(before)
+		UncompressedBytes.Click(after)
+	} else {
+		bc, _ := io.Copy(io.Discard, c.Request.Body)
+		UncompressedBytes.Click(int(bc))
 	}
 
 	if !g.shouldCompress(c.Request) {
@@ -80,4 +94,23 @@ func (g *gzipHandler) shouldCompress(req *http.Request) bool {
 	}
 
 	return true
+}
+
+// shouldDecompress returns true if the Content-Encoding is "gzip" or "application/gzip"
+// TODO: detect bad header for non-compressed request body and return false for fault tolerance
+func (g *gzipHandler) shouldDecompress(c *gin.Context) bool {
+	const (
+		encHeaderKey    = `Content-Encoding`
+		encHeaderZipVal = `gzip`
+	)
+	if c != nil && c.Request != nil {
+		enc := strings.ToLower(c.Request.Header.Get(encHeaderKey))
+		if strings.HasSuffix(enc, encHeaderZipVal) {
+			CompressedRequests.Click(1)
+			return true
+		}
+	}
+
+	UncompressedRequests.Click(1)
+	return false
 }
