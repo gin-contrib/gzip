@@ -52,11 +52,13 @@ func newGzipHandler(level int, options ...Option) *gzipHandler {
 func (g *gzipHandler) Handle(c *gin.Context) {
 	if fn := g.DecompressFn; fn != nil && g.shouldDecompress(c) {
 		before, after := fn(c)
+		CompressedRequests.Click(1)
 		CompressedBytes.Click(before)
 		DecompressedBytes.Click(after)
 	} else {
 		cls := c.Request.Header.Get("Content-Length")
 		if bl, _ := strconv.Atoi(cls); bl > 0 {
+			UncompressedRequests.Click(1)
 			UncompressedBytes.Click(bl)
 		}
 		return
@@ -109,11 +111,9 @@ func (g *gzipHandler) shouldDecompress(c *gin.Context) bool {
 	if c != nil && c.Request != nil {
 		enc := strings.ToLower(c.Request.Header.Get(encHeaderKey))
 		if strings.HasSuffix(enc, encHeaderZipVal) {
-			CompressedRequests.Click(1)
 			return true
 		}
 	}
 
-	UncompressedRequests.Click(1)
 	return false
 }
