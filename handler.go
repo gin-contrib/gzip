@@ -3,10 +3,10 @@ package gzipfork
 import (
 	"compress/gzip"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -15,7 +15,11 @@ import (
 )
 
 var (
-	CompressedBytes      = &clicker.Clicker{}
+	// CompressedBytes counts the bytes of compressed requests before decompression
+	CompressedBytes = &clicker.Clicker{}
+	// DecompressedBytes counts the bytes of compressed requests after decompression
+	DecompressedBytes = &clicker.Clicker{}
+	// UncompressedBytes counts the bytes of uncompressed requests
 	UncompressedBytes    = &clicker.Clicker{}
 	CompressedRequests   = &clicker.Clicker{}
 	UncompressedRequests = &clicker.Clicker{}
@@ -49,13 +53,12 @@ func (g *gzipHandler) Handle(c *gin.Context) {
 	if fn := g.DecompressFn; fn != nil && g.shouldDecompress(c) {
 		before, after := fn(c)
 		CompressedBytes.Click(before)
-		UncompressedBytes.Click(after)
+		DecompressedBytes.Click(after)
 	} else {
-		bc, _ := io.Copy(io.Discard, c.Request.Body)
-		UncompressedBytes.Click(int(bc))
-	}
-
-	if !g.shouldCompress(c.Request) {
+		cls := c.Request.Header.Get("Content-Length")
+		if bl, _ := strconv.Atoi(cls); bl > 0 {
+			UncompressedBytes.Click(bl)
+		}
 		return
 	}
 
