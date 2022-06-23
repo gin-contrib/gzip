@@ -1,4 +1,4 @@
-package gzip
+package gzipfork
 
 import (
 	"compress/gzip"

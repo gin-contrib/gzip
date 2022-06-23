@@ -6,13 +6,13 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gin-contrib/gzip"
+	"github.com/elephant-insurance/gzipfork"
 	"github.com/gin-gonic/gin"
 )
 
 func main() {
 	r := gin.Default()
-	r.Use(gzip.Gzip(gzip.DefaultCompression))
+	r.Use(gzipfork.Gzip(gzipfork.DefaultCompression))
 	r.GET("/ping", func(c *gin.Context) {
 		c.String(http.StatusOK, "pong "+fmt.Sprint(time.Now().Unix()))
 	})
