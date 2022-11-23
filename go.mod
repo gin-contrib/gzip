@@ -1,4 +1,4 @@
-module github.com/gin-contrib/gzip
+module github.com/lawyzheng/gzip
 
 require (
 	github.com/gin-gonic/gin v1.8.1
