@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/elephant-insurance/go-microservice-arch/v2/clicker"
+	"github.com/elephant-insurance/go-microservice-arch/v3/clicker"
 	"github.com/gin-gonic/gin"
 )
 
