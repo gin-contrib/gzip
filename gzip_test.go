@@ -104,44 +104,38 @@ func TestGzipPNG(t *testing.T) {
 	assert.Equal(t, w.Body.String(), "this is a PNG!")
 }
 
-func TestExcludedExtensions(t *testing.T) {
-	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/index.html", nil)
-	req.Header.Add("Accept-Encoding", "gzip")
+func TestExcludedPathsAndExtensions(t *testing.T) {
+	tests := []struct {
+		path                    string
+		option                  Option
+		expectedContentEncoding string
+		expectedVary            string
+		expectedBody            string
+		expectedContentLength   string
+	}{
+		{"/api/books", WithExcludedPaths([]string{"/api/"}), "", "", "this is books!", ""},
+		{"/index.html", WithExcludedExtensions([]string{".html"}), "", "", "this is a HTML!", ""},
+	}
 
-	router := gin.New()
-	router.Use(Gzip(DefaultCompression, WithExcludedExtensions([]string{".html"})))
-	router.GET("/index.html", func(c *gin.Context) {
-		c.String(200, "this is a HTML!")
-	})
+	for _, tt := range tests {
+		req, _ := http.NewRequestWithContext(context.Background(), "GET", tt.path, nil)
+		req.Header.Add("Accept-Encoding", "gzip")
 
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
+		router := gin.New()
+		router.Use(Gzip(DefaultCompression, tt.option))
+		router.GET(tt.path, func(c *gin.Context) {
+			c.String(200, tt.expectedBody)
+		})
 
-	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "", w.Header().Get("Content-Encoding"))
-	assert.Equal(t, "", w.Header().Get("Vary"))
-	assert.Equal(t, "this is a HTML!", w.Body.String())
-	assert.Equal(t, "", w.Header().Get("Content-Length"))
-}
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
 
-func TestExcludedPaths(t *testing.T) {
-	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/api/books", nil)
-	req.Header.Add("Accept-Encoding", "gzip")
-
-	router := gin.New()
-	router.Use(Gzip(DefaultCompression, WithExcludedPaths([]string{"/api/"})))
-	router.GET("/api/books", func(c *gin.Context) {
-		c.String(200, "this is books!")
-	})
-
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "", w.Header().Get("Content-Encoding"))
-	assert.Equal(t, "", w.Header().Get("Vary"))
-	assert.Equal(t, "this is books!", w.Body.String())
-	assert.Equal(t, "", w.Header().Get("Content-Length"))
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, tt.expectedContentEncoding, w.Header().Get("Content-Encoding"))
+		assert.Equal(t, tt.expectedVary, w.Header().Get("Vary"))
+		assert.Equal(t, tt.expectedBody, w.Body.String())
+		assert.Equal(t, tt.expectedContentLength, w.Header().Get("Content-Length"))
+	}
 }
 
 func TestNoGzip(t *testing.T) {
