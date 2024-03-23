@@ -23,6 +23,9 @@ type Options struct {
 	ExcludedPaths        ExcludedPaths
 	ExcludedPathesRegexs ExcludedPathesRegexs
 	DecompressFn         func(c *gin.Context)
+	// MatchSupportedRequestFn has a precedence over Excluded* options.
+	// `ok' value is to stop other checks and treat `supported` value as if the request should be compressed or not.
+	MatchSupportedRequestFn func(req *http.Request) (ok bool, supported bool)
 }
 
 type Option func(*Options)
@@ -48,6 +51,12 @@ func WithExcludedPathsRegexs(args []string) Option {
 func WithDecompressFn(decompressFn func(c *gin.Context)) Option {
 	return func(o *Options) {
 		o.DecompressFn = decompressFn
+	}
+}
+
+func WithMatchSupportedRequestFn(matchSupportedRequestFn func(req *http.Request) (bool, bool)) Option {
+	return func(o *Options) {
+		o.MatchSupportedRequestFn = matchSupportedRequestFn
 	}
 }
 
