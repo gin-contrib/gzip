@@ -19,7 +19,8 @@ func Gzip(level int, options ...Option) gin.HandlerFunc {
 
 type gzipWriter struct {
 	gin.ResponseWriter
-	writer *gzip.Writer
+	writer  *gzip.Writer
+	gzipped bool
 }
 
 func (g *gzipWriter) WriteString(s string) (int, error) {
@@ -28,12 +29,28 @@ func (g *gzipWriter) WriteString(s string) (int, error) {
 }
 
 func (g *gzipWriter) Write(data []byte) (int, error) {
+	g.gzipped = g.isGzipped(data) || g.gzipped
+	if g.gzipped {
+		return g.ResponseWriter.Write(data)
+	}
+
+	g.Header().Set("Content-Encoding", "gzip")
+	g.Header().Set("Vary", "Accept-Encoding")
 	g.Header().Del("Content-Length")
 	return g.writer.Write(data)
 }
 
 // Fix: https://github.com/mholt/caddy/issues/38
 func (g *gzipWriter) WriteHeader(code int) {
+	g.Header().Set("Content-Encoding", "gzip")
+	g.Header().Set("Vary", "Accept-Encoding")
 	g.Header().Del("Content-Length")
 	g.ResponseWriter.WriteHeader(code)
+}
+
+func (g *gzipWriter) isGzipped(input []byte) bool {
+	if len(input) < 2 {
+		return false
+	}
+	return input[0] == 0x1f && input[1] == 0x8b
 }
