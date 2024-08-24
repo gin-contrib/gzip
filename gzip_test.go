@@ -5,7 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
@@ -81,7 +81,7 @@ func TestGzip(t *testing.T) {
 	assert.NoError(t, err)
 	defer gr.Close()
 
-	body, _ := ioutil.ReadAll(gr)
+	body, _ := io.ReadAll(gr)
 	assert.Equal(t, string(body), testResponse)
 }
 
@@ -170,7 +170,7 @@ func TestGzipWithReverseProxy(t *testing.T) {
 	assert.NoError(t, err)
 	defer gr.Close()
 
-	body, _ := ioutil.ReadAll(gr)
+	body, _ := io.ReadAll(gr)
 	assert.Equal(t, string(body), testReverseResponse)
 }
 
