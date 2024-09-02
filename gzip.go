@@ -32,6 +32,11 @@ func (g *gzipWriter) Write(data []byte) (int, error) {
 	return g.writer.Write(data)
 }
 
+func (g *gzipWriter) Flush() {
+	_ = g.writer.Flush()
+	g.ResponseWriter.Flush()
+}
+
 // Fix: https://github.com/mholt/caddy/issues/38
 func (g *gzipWriter) WriteHeader(code int) {
 	g.Header().Del("Content-Length")
