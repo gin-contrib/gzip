@@ -54,6 +54,10 @@ func (g *gzipHandler) Handle(c *gin.Context) {
 	c.Header("Vary", "Accept-Encoding")
 	c.Writer = &gzipWriter{c.Writer, gz}
 	defer func() {
+		if c.Writer.Size() < 0 {
+			// do not write gzip footer when nothing is written to the response body
+			gz.Reset(io.Discard)
+		}
 		gz.Close()
 		c.Header("Content-Length", fmt.Sprint(c.Writer.Size()))
 	}()
