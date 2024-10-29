@@ -2,6 +2,8 @@ package gzip
 
 import (
 	"compress/gzip"
+	"errors"
+	"io"
 	"net/http"
 	"regexp"
 	"strings"
@@ -16,6 +18,7 @@ var (
 	DefaultOptions = &Options{
 		ExcludedExtensions: DefaultExcludedExtentions,
 	}
+	UnsupportedContentEncoding = errors.New("Unsupported content encoding")
 )
 
 type Options struct {
@@ -105,12 +108,53 @@ func DefaultDecompressHandle(c *gin.Context) {
 	if c.Request.Body == nil {
 		return
 	}
-	r, err := gzip.NewReader(c.Request.Body)
-	if err != nil {
-		_ = c.AbortWithError(http.StatusBadRequest, err)
+
+	contentEncodingField := strings.Split(strings.ToLower(c.GetHeader("Content-Encoding")), ",")
+	if len(contentEncodingField) == 0 { // nothing to decompress
+		c.Next()
+
 		return
 	}
+
+	toClose := make([]io.Closer, 0, len(contentEncodingField))
+	defer func() {
+		for i := len(toClose); i > 0; i-- {
+			toClose[i-1].Close()
+		}
+	}()
+
+	// parses multiply gzips like
+	// Content-Encoding: gzip, gzip, gzip
+	// allowed by RFC
+	for i := 0; i < len(contentEncodingField); i++ {
+		trimmedValue := strings.TrimSpace(contentEncodingField[i])
+
+		if trimmedValue == "" {
+			continue
+		}
+
+		if trimmedValue != "gzip" {
+			// https://www.rfc-editor.org/rfc/rfc7231#section-3.1.2.2
+			// An origin server MAY respond with a status code of 415 (Unsupported
+			// Media Type) if a representation in the request message has a content
+			// coding that is not acceptable.
+			_ = c.AbortWithError(http.StatusUnsupportedMediaType, UnsupportedContentEncoding)
+		}
+
+		r, err := gzip.NewReader(c.Request.Body)
+		if err != nil {
+			_ = c.AbortWithError(http.StatusBadRequest, err)
+
+			return
+		}
+
+		toClose = append(toClose, c.Request.Body)
+
+		c.Request.Body = r
+	}
+
 	c.Request.Header.Del("Content-Encoding")
 	c.Request.Header.Del("Content-Length")
-	c.Request.Body = r
+
+	c.Next()
 }
