@@ -23,6 +23,7 @@ type Options struct {
 	ExcludedPaths        ExcludedPaths
 	ExcludedPathesRegexs ExcludedPathesRegexs
 	DecompressFn         func(c *gin.Context)
+	DecompressOnly       bool
 }
 
 type Option func(*Options)
@@ -48,6 +49,13 @@ func WithExcludedPathsRegexs(args []string) Option {
 func WithDecompressFn(decompressFn func(c *gin.Context)) Option {
 	return func(o *Options) {
 		o.DecompressFn = decompressFn
+	}
+}
+
+// disable compression, only decompress incoming request
+func WithDecompressOnly(decompressOnly bool) Option {
+	return func(o *Options) {
+		o.DecompressOnly = decompressOnly
 	}
 }
 

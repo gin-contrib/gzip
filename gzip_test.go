@@ -247,3 +247,75 @@ func TestDecompressGzipWithIncorrectData(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
+
+func TestDecompressOnly(t *testing.T) {
+	buf := &bytes.Buffer{}
+	gz, _ := gzip.NewWriterLevel(buf, gzip.DefaultCompression)
+	if _, err := gz.Write([]byte(testResponse)); err != nil {
+		gz.Close()
+		t.Fatal(err)
+	}
+	gz.Close()
+
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/", buf)
+	req.Header.Add("Content-Encoding", "gzip")
+
+	router := gin.New()
+	router.Use(Gzip(NoCompression, WithDecompressOnly(true), WithDecompressFn(DefaultDecompressHandle)))
+	router.POST("/", func(c *gin.Context) {
+		if v := c.Request.Header.Get("Content-Encoding"); v != "" {
+			t.Errorf("unexpected `Content-Encoding`: %s header", v)
+		}
+		if v := c.Request.Header.Get("Content-Length"); v != "" {
+			t.Errorf("unexpected `Content-Length`: %s header", v)
+		}
+		data, err := c.GetRawData()
+		if err != nil {
+			t.Fatal(err)
+		}
+		c.Data(200, "text/plain", data)
+	})
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "", w.Header().Get("Content-Encoding"))
+	assert.Equal(t, "", w.Header().Get("Vary"))
+	assert.Equal(t, testResponse, w.Body.String())
+	assert.Equal(t, "", w.Header().Get("Content-Length"))
+}
+
+func TestGzipWithDecompressOnly(t *testing.T) {
+	buf := &bytes.Buffer{}
+	gz, _ := gzip.NewWriterLevel(buf, gzip.DefaultCompression)
+	if _, err := gz.Write([]byte(testResponse)); err != nil {
+		gz.Close()
+		t.Fatal(err)
+	}
+	gz.Close()
+
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/", buf)
+	req.Header.Add("Content-Encoding", "gzip")
+	req.Header.Add("Accept-Encoding", "gzip")
+
+	r := gin.New()
+	r.Use(Gzip(NoCompression, WithDecompressOnly(true), WithDecompressFn(DefaultDecompressHandle)))
+	r.POST("/", func(c *gin.Context) {
+		assert.Equal(t, c.Request.Header.Get("Content-Encoding"), "")
+		assert.Equal(t, c.Request.Header.Get("Content-Length"), "")
+		body, err := c.GetRawData()
+		if err != nil {
+			t.Fatal(err)
+		}
+		assert.Equal(t, testResponse, string(body))
+		c.String(200, testResponse)
+	})
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, w.Code, 200)
+	assert.Equal(t, w.Header().Get("Content-Encoding"), "")
+	assert.Equal(t, w.Body.String(), testResponse)
+}
