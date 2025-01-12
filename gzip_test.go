@@ -319,3 +319,28 @@ func TestGzipWithDecompressOnly(t *testing.T) {
 	assert.Equal(t, w.Header().Get("Content-Encoding"), "")
 	assert.Equal(t, w.Body.String(), testResponse)
 }
+
+func TestCustomShouldCompressFn(t *testing.T) {
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/", nil)
+	req.Header.Add("Accept-Encoding", "gzip")
+
+	router := gin.New()
+	router.Use(Gzip(
+		DefaultCompression,
+		WithCustomShouldCompressFn(func(_ *gin.Context) bool {
+			return false
+		}),
+	))
+	router.GET("/", func(c *gin.Context) {
+		c.Header("Content-Length", strconv.Itoa(len(testResponse)))
+		c.String(200, testResponse)
+	})
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, 200, w.Code)
+	assert.Equal(t, "", w.Header().Get("Content-Encoding"))
+	assert.Equal(t, "19", w.Header().Get("Content-Length"))
+	assert.Equal(t, testResponse, w.Body.String())
+}
