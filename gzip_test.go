@@ -315,9 +315,9 @@ func TestGzipWithDecompressOnly(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-	assert.Equal(t, w.Code, 200)
-	assert.Equal(t, w.Header().Get(headerContentEncoding), "")
-	assert.Equal(t, w.Body.String(), testResponse)
+	assert.Equal(t, 200, w.Code)
+	assert.Equal(t, "", w.Header().Get(headerContentEncoding))
+	assert.Equal(t, testResponse, w.Body.String())
 }
 
 func TestCustomShouldCompressFn(t *testing.T) {
