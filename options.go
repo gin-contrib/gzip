@@ -34,11 +34,12 @@ func (o optionFunc) apply(c *config) {
 }
 
 type config struct {
-	excludedExtensions   ExcludedExtensions
-	excludedPaths        ExcludedPaths
-	excludedPathesRegexs ExcludedPathesRegexs
-	decompressFn         func(c *gin.Context)
-	decompressOnly       bool
+	excludedExtensions     ExcludedExtensions
+	excludedPaths          ExcludedPaths
+	excludedPathesRegexs   ExcludedPathesRegexs
+	decompressFn           func(c *gin.Context)
+	decompressOnly         bool
+	customShouldCompressFn func(c *gin.Context) bool
 }
 
 // WithExcludedExtensions returns an Option that sets the ExcludedExtensions field of the Options struct.
@@ -84,6 +85,28 @@ func WithDecompressFn(decompressFn func(c *gin.Context)) Option {
 func WithDecompressOnly() Option {
 	return optionFunc(func(o *config) {
 		o.decompressOnly = true
+	})
+}
+
+// WithCustomShouldCompressFn returns an Option that sets the CustomShouldCompressFn field of the Options struct.
+// Parameters:
+//   - fn: func(c *gin.Context) bool - A function to determine if a request should be compressed.
+//     The function should return true if the request should be compressed, false otherwise.
+//     If the function returns false, the middleware will not compress the response.
+//     If the function is nil, the middleware will use the default logic to determine
+//     if the response should be compressed.
+//
+// Returns:
+//   - Option - An option that sets the CustomShouldCompressFn field of the Options struct.
+//
+// Example:
+//
+//	router.Use(gzip.Gzip(gzip.DefaultCompression, gzip.WithCustomShouldCompressFn(func(c *gin.Context) bool {
+//		return c.Request.URL.Path != "/no-compress"
+//	})))
+func WithCustomShouldCompressFn(fn func(c *gin.Context) bool) Option {
+	return optionFunc(func(o *config) {
+		o.customShouldCompressFn = fn
 	})
 }
 
