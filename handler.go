@@ -12,6 +12,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+const (
+	headerAcceptEncoding  = "Accept-Encoding"
+	headerContentEncoding = "Content-Encoding"
+	headerVary            = "Vary"
+)
+
 type gzipHandler struct {
 	*config
 	gzPool sync.Pool
@@ -65,8 +71,8 @@ func (g *gzipHandler) Handle(c *gin.Context) {
 	defer gz.Reset(io.Discard)
 	gz.Reset(c.Writer)
 
-	c.Header("Content-Encoding", "gzip")
-	c.Header("Vary", "Accept-Encoding")
+	c.Header(headerContentEncoding, "gzip")
+	c.Header(headerVary, headerAcceptEncoding)
 	c.Writer = &gzipWriter{c.Writer, gz}
 	defer func() {
 		if c.Writer.Size() < 0 {

@@ -48,7 +48,7 @@ func TestHandleGzip(t *testing.T) {
 			})
 
 			req, _ := http.NewRequestWithContext(context.Background(), "GET", tt.path, nil)
-			req.Header.Set("Accept-Encoding", tt.acceptEncoding)
+			req.Header.Set(headerAcceptEncoding, tt.acceptEncoding)
 
 			w := httptest.NewRecorder()
 			router.ServeHTTP(w, req)
