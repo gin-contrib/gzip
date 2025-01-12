@@ -11,6 +11,7 @@ const (
 	BestSpeed          = gzip.BestSpeed
 	DefaultCompression = gzip.DefaultCompression
 	NoCompression      = gzip.NoCompression
+	HuffmanOnly        = gzip.HuffmanOnly
 )
 
 func Gzip(level int, options ...Option) gin.HandlerFunc {
