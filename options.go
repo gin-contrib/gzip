@@ -9,59 +9,72 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-var (
-	DefaultExcludedExtentions = NewExcludedExtensions([]string{
-		".png", ".gif", ".jpeg", ".jpg",
-	})
-	DefaultOptions = &Options{
-		ExcludedExtensions: DefaultExcludedExtentions,
-	}
-)
+// DefaultExcludedExtentions is a predefined list of file extensions that should be excluded from gzip compression.
+// These extensions typically represent image files that are already compressed
+// and do not benefit from additional compression.
+var DefaultExcludedExtentions = NewExcludedExtensions([]string{
+	".png", ".gif", ".jpeg", ".jpg",
+})
 
-type Options struct {
-	ExcludedExtensions   ExcludedExtensions
-	ExcludedPaths        ExcludedPaths
-	ExcludedPathesRegexs ExcludedPathesRegexs
-	DecompressFn         func(c *gin.Context)
-	DecompressOnly       bool
+// Option is an interface that defines a method to apply a configuration
+// to a given config instance. Implementations of this interface can be
+// used to modify the configuration settings of the logger.
+type Option interface {
+	apply(*config)
 }
 
-type Option func(*Options)
+// Ensures that optionFunc implements the Option interface at compile time.
+// If optionFunc does not implement Option, a compile-time error will occur.
+var _ Option = (*optionFunc)(nil)
+
+type optionFunc func(*config)
+
+func (o optionFunc) apply(c *config) {
+	o(c)
+}
+
+type config struct {
+	excludedExtensions   ExcludedExtensions
+	excludedPaths        ExcludedPaths
+	excludedPathesRegexs ExcludedPathesRegexs
+	decompressFn         func(c *gin.Context)
+	decompressOnly       bool
+}
 
 // WithExcludedExtensions returns an Option that sets the ExcludedExtensions field of the Options struct.
 // Parameters:
 //   - args: []string - A slice of file extensions to exclude from gzip compression.
 func WithExcludedExtensions(args []string) Option {
-	return func(o *Options) {
-		o.ExcludedExtensions = NewExcludedExtensions(args)
-	}
+	return optionFunc(func(o *config) {
+		o.excludedExtensions = NewExcludedExtensions(args)
+	})
 }
 
 // WithExcludedPaths returns an Option that sets the ExcludedPaths field of the Options struct.
 // Parameters:
 //   - args: []string - A slice of paths to exclude from gzip compression.
 func WithExcludedPaths(args []string) Option {
-	return func(o *Options) {
-		o.ExcludedPaths = NewExcludedPaths(args)
-	}
+	return optionFunc(func(o *config) {
+		o.excludedPaths = NewExcludedPaths(args)
+	})
 }
 
 // WithExcludedPathsRegexs returns an Option that sets the ExcludedPathesRegexs field of the Options struct.
 // Parameters:
 //   - args: []string - A slice of regex patterns to exclude paths from gzip compression.
 func WithExcludedPathsRegexs(args []string) Option {
-	return func(o *Options) {
-		o.ExcludedPathesRegexs = NewExcludedPathesRegexs(args)
-	}
+	return optionFunc(func(o *config) {
+		o.excludedPathesRegexs = NewExcludedPathesRegexs(args)
+	})
 }
 
 // WithDecompressFn returns an Option that sets the DecompressFn field of the Options struct.
 // Parameters:
 //   - decompressFn: func(c *gin.Context) - A function to handle decompression of incoming requests.
 func WithDecompressFn(decompressFn func(c *gin.Context)) Option {
-	return func(o *Options) {
-		o.DecompressFn = decompressFn
-	}
+	return optionFunc(func(o *config) {
+		o.decompressFn = decompressFn
+	})
 }
 
 // WithDecompressOnly is an option that configures the gzip middleware to only
@@ -69,9 +82,9 @@ func WithDecompressFn(decompressFn func(c *gin.Context)) Option {
 // option is enabled, the middleware will set the DecompressOnly field of the
 // Options struct to true.
 func WithDecompressOnly() Option {
-	return func(o *Options) {
-		o.DecompressOnly = true
-	}
+	return optionFunc(func(o *config) {
+		o.decompressOnly = true
+	})
 }
 
 // Using map for better lookup performance

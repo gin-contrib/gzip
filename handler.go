@@ -13,13 +13,22 @@ import (
 )
 
 type gzipHandler struct {
-	*Options
+	*config
 	gzPool sync.Pool
 }
 
-func newGzipHandler(level int, options ...Option) *gzipHandler {
+func newGzipHandler(level int, opts ...Option) *gzipHandler {
+	cfg := &config{
+		excludedExtensions: DefaultExcludedExtentions,
+	}
+
+	// Apply each option to the config
+	for _, o := range opts {
+		o.apply(cfg)
+	}
+
 	handler := &gzipHandler{
-		Options: DefaultOptions,
+		config: cfg,
 		gzPool: sync.Pool{
 			New: func() interface{} {
 				gz, err := gzip.NewWriterLevel(io.Discard, level)
@@ -30,18 +39,15 @@ func newGzipHandler(level int, options ...Option) *gzipHandler {
 			},
 		},
 	}
-	for _, setter := range options {
-		setter(handler.Options)
-	}
 	return handler
 }
 
 func (g *gzipHandler) Handle(c *gin.Context) {
-	if fn := g.DecompressFn; fn != nil && c.Request.Header.Get("Content-Encoding") == "gzip" {
+	if fn := g.decompressFn; fn != nil && c.Request.Header.Get("Content-Encoding") == "gzip" {
 		fn(c)
 	}
 
-	if g.DecompressOnly || !g.shouldCompress(c.Request) {
+	if g.decompressOnly || !g.shouldCompress(c.Request) {
 		return
 	}
 
@@ -71,14 +77,14 @@ func (g *gzipHandler) shouldCompress(req *http.Request) bool {
 	}
 
 	extension := filepath.Ext(req.URL.Path)
-	if g.ExcludedExtensions.Contains(extension) {
+	if g.excludedExtensions.Contains(extension) {
 		return false
 	}
 
-	if g.ExcludedPaths.Contains(req.URL.Path) {
+	if g.excludedPaths.Contains(req.URL.Path) {
 		return false
 	}
-	if g.ExcludedPathesRegexs.Contains(req.URL.Path) {
+	if g.excludedPathesRegexs.Contains(req.URL.Path) {
 		return false
 	}
 
