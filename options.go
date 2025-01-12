@@ -55,7 +55,7 @@ func WithDecompressFn(decompressFn func(c *gin.Context)) Option {
 type ExcludedExtensions map[string]struct{}
 
 func NewExcludedExtensions(extensions []string) ExcludedExtensions {
-	res := make(ExcludedExtensions)
+	res := make(ExcludedExtensions, len(extensions))
 	for _, e := range extensions {
 		res[e] = struct{}{}
 	}
@@ -85,7 +85,7 @@ func (e ExcludedPaths) Contains(requestURI string) bool {
 type ExcludedPathesRegexs []*regexp.Regexp
 
 func NewExcludedPathesRegexs(regexs []string) ExcludedPathesRegexs {
-	result := make([]*regexp.Regexp, len(regexs))
+	result := make(ExcludedPathesRegexs, len(regexs))
 	for i, reg := range regexs {
 		result[i] = regexp.MustCompile(reg)
 	}
