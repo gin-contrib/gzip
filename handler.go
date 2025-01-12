@@ -42,12 +42,21 @@ func newGzipHandler(level int, opts ...Option) *gzipHandler {
 	return handler
 }
 
+// Handle is a middleware function for handling gzip compression in HTTP requests and responses.
+// It first checks if the request has a "Content-Encoding" header set to "gzip" and if a decompression
+// function is provided, it will call the decompression function. If the handler is set to decompress only,
+// or if the custom compression decision function indicates not to compress, it will return early.
+// Otherwise, it retrieves a gzip.Writer from the pool, sets the necessary response headers for gzip encoding,
+// and wraps the response writer with a gzipWriter. After the request is processed, it ensures the gzip.Writer
+// is properly closed and the "Content-Length" header is set based on the response size.
 func (g *gzipHandler) Handle(c *gin.Context) {
 	if fn := g.decompressFn; fn != nil && c.Request.Header.Get("Content-Encoding") == "gzip" {
 		fn(c)
 	}
 
-	if g.decompressOnly || !g.shouldCompress(c.Request) {
+	if g.decompressOnly ||
+		(g.customShouldCompressFn != nil && !g.customShouldCompressFn(c)) ||
+		(g.customShouldCompressFn == nil && !g.shouldCompress(c.Request)) {
 		return
 	}
 
@@ -76,15 +85,11 @@ func (g *gzipHandler) shouldCompress(req *http.Request) bool {
 		return false
 	}
 
+	// Check if the request path is excluded from compression
 	extension := filepath.Ext(req.URL.Path)
-	if g.excludedExtensions.Contains(extension) {
-		return false
-	}
-
-	if g.excludedPaths.Contains(req.URL.Path) {
-		return false
-	}
-	if g.excludedPathesRegexs.Contains(req.URL.Path) {
+	if g.excludedExtensions.Contains(extension) ||
+		g.excludedPaths.Contains(req.URL.Path) ||
+		g.excludedPathesRegexs.Contains(req.URL.Path) {
 		return false
 	}
 
