@@ -261,7 +261,7 @@ func TestDecompressOnly(t *testing.T) {
 	req.Header.Add("Content-Encoding", "gzip")
 
 	router := gin.New()
-	router.Use(Gzip(NoCompression, WithDecompressOnly(true), WithDecompressFn(DefaultDecompressHandle)))
+	router.Use(Gzip(NoCompression, WithDecompressOnly(), WithDecompressFn(DefaultDecompressHandle)))
 	router.POST("/", func(c *gin.Context) {
 		if v := c.Request.Header.Get("Content-Encoding"); v != "" {
 			t.Errorf("unexpected `Content-Encoding`: %s header", v)
@@ -300,7 +300,7 @@ func TestGzipWithDecompressOnly(t *testing.T) {
 	req.Header.Add("Accept-Encoding", "gzip")
 
 	r := gin.New()
-	r.Use(Gzip(NoCompression, WithDecompressOnly(true), WithDecompressFn(DefaultDecompressHandle)))
+	r.Use(Gzip(NoCompression, WithDecompressOnly(), WithDecompressFn(DefaultDecompressHandle)))
 	r.POST("/", func(c *gin.Context) {
 		assert.Equal(t, c.Request.Header.Get("Content-Encoding"), "")
 		assert.Equal(t, c.Request.Header.Get("Content-Length"), "")

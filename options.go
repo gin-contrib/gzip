@@ -52,10 +52,13 @@ func WithDecompressFn(decompressFn func(c *gin.Context)) Option {
 	}
 }
 
-// disable compression, only decompress incoming request
-func WithDecompressOnly(decompressOnly bool) Option {
+// WithDecompressOnly is an option that configures the gzip middleware to only
+// decompress incoming requests without compressing the responses. When this
+// option is enabled, the middleware will set the DecompressOnly field of the
+// Options struct to true.
+func WithDecompressOnly() Option {
 	return func(o *Options) {
-		o.DecompressOnly = decompressOnly
+		o.DecompressOnly = true
 	}
 }
 
