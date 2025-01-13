@@ -23,6 +23,12 @@ type gzipHandler struct {
 	gzPool sync.Pool
 }
 
+func isCompressionLevelValid(level int) bool {
+	return level == gzip.DefaultCompression ||
+		level == gzip.NoCompression ||
+		(level >= gzip.BestSpeed && level <= gzip.BestCompression)
+}
+
 func newGzipHandler(level int, opts ...Option) *gzipHandler {
 	cfg := &config{
 		excludedExtensions: DefaultExcludedExtentions,
@@ -31,6 +37,11 @@ func newGzipHandler(level int, opts ...Option) *gzipHandler {
 	// Apply each option to the config
 	for _, o := range opts {
 		o.apply(cfg)
+	}
+
+	if !isCompressionLevelValid(level) {
+		// For web content, level 4 seems to be a sweet spot.
+		level = 4
 	}
 
 	handler := &gzipHandler{
