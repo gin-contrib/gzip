@@ -99,7 +99,7 @@ func (g *gzipHandler) Handle(c *gin.Context) {
 }
 
 func (g *gzipHandler) shouldCompress(req *http.Request) bool {
-	if !strings.Contains(req.Header.Get("Accept-Encoding"), "gzip") ||
+	if !strings.Contains(req.Header.Get(headerAcceptEncoding), "gzip") ||
 		strings.Contains(req.Header.Get("Connection"), "Upgrade") {
 		return false
 	}
