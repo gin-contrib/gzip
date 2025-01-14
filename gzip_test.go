@@ -1,11 +1,13 @@
 package gzip
 
 import (
+	"bufio"
 	"bytes"
 	"compress/gzip"
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
@@ -15,6 +17,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -343,4 +346,50 @@ func TestCustomShouldCompressFn(t *testing.T) {
 	assert.Equal(t, "", w.Header().Get(headerContentEncoding))
 	assert.Equal(t, "19", w.Header().Get("Content-Length"))
 	assert.Equal(t, testResponse, w.Body.String())
+}
+
+type hijackableResponse struct {
+	Hijacked bool
+	header   http.Header
+}
+
+func newHijackableResponse() *hijackableResponse {
+	return &hijackableResponse{header: make(http.Header)}
+}
+
+func (h *hijackableResponse) Header() http.Header       { return h.header }
+func (h *hijackableResponse) Write([]byte) (int, error) { return 0, nil }
+func (h *hijackableResponse) WriteHeader(int)           {}
+func (h *hijackableResponse) Flush()                    {}
+func (h *hijackableResponse) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h.Hijacked = true
+	return nil, nil, nil
+}
+
+func TestResponseWriterHijack(t *testing.T) {
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/", nil)
+	req.Header.Add(headerAcceptEncoding, "gzip")
+
+	router := gin.New()
+	router.Use(Gzip(
+		DefaultCompression,
+		WithCustomShouldCompressFn(func(_ *gin.Context) bool {
+			return false
+		}),
+	)).Use(gin.HandlerFunc(func(c *gin.Context) {
+		hj, ok := c.Writer.(http.Hijacker)
+		require.True(t, ok)
+
+		_, _, err := hj.Hijack()
+		assert.Nil(t, err)
+		c.Next()
+	}))
+	router.GET("/", func(c *gin.Context) {
+		c.Header("Content-Length", strconv.Itoa(len(testResponse)))
+		c.String(200, testResponse)
+	})
+
+	hijackable := newHijackableResponse()
+	router.ServeHTTP(hijackable, req)
+	assert.True(t, hijackable.Hijacked)
 }

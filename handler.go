@@ -23,6 +23,12 @@ type gzipHandler struct {
 	gzPool sync.Pool
 }
 
+func isCompressionLevelValid(level int) bool {
+	return level == gzip.DefaultCompression ||
+		level == gzip.NoCompression ||
+		(level >= gzip.BestSpeed && level <= gzip.BestCompression)
+}
+
 func newGzipHandler(level int, opts ...Option) *gzipHandler {
 	cfg := &config{
 		excludedExtensions: DefaultExcludedExtentions,
@@ -31,6 +37,11 @@ func newGzipHandler(level int, opts ...Option) *gzipHandler {
 	// Apply each option to the config
 	for _, o := range opts {
 		o.apply(cfg)
+	}
+
+	if !isCompressionLevelValid(level) {
+		// For web content, level 4 seems to be a sweet spot.
+		level = 4
 	}
 
 	handler := &gzipHandler{
@@ -56,7 +67,7 @@ func newGzipHandler(level int, opts ...Option) *gzipHandler {
 // and wraps the response writer with a gzipWriter. After the request is processed, it ensures the gzip.Writer
 // is properly closed and the "Content-Length" header is set based on the response size.
 func (g *gzipHandler) Handle(c *gin.Context) {
-	if fn := g.decompressFn; fn != nil && c.Request.Header.Get("Content-Encoding") == "gzip" {
+	if fn := g.decompressFn; fn != nil && strings.Contains(c.Request.Header.Get("Content-Encoding"), "gzip") {
 		fn(c)
 	}
 
@@ -67,8 +78,10 @@ func (g *gzipHandler) Handle(c *gin.Context) {
 	}
 
 	gz := g.gzPool.Get().(*gzip.Writer)
-	defer g.gzPool.Put(gz)
-	defer gz.Reset(io.Discard)
+	defer func() {
+		g.gzPool.Put(gz)
+		gz.Reset(io.Discard)
+	}()
 	gz.Reset(c.Writer)
 
 	c.Header(headerContentEncoding, "gzip")
@@ -88,7 +101,7 @@ func (g *gzipHandler) Handle(c *gin.Context) {
 }
 
 func (g *gzipHandler) shouldCompress(req *http.Request) bool {
-	if !strings.Contains(req.Header.Get("Accept-Encoding"), "gzip") ||
+	if !strings.Contains(req.Header.Get(headerAcceptEncoding), "gzip") ||
 		strings.Contains(req.Header.Get("Connection"), "Upgrade") {
 		return false
 	}
