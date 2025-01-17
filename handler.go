@@ -2,10 +2,10 @@ package gzip
 
 import (
 	"compress/gzip"
-	"fmt"
 	"io"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -92,8 +92,10 @@ func (g *gzipHandler) Handle(c *gin.Context) {
 			// do not write gzip footer when nothing is written to the response body
 			gz.Reset(io.Discard)
 		}
-		gz.Close()
-		c.Header("Content-Length", fmt.Sprint(c.Writer.Size()))
+		_ = gz.Close()
+		if c.Writer.Size() > -1 {
+			c.Header("Content-Length", strconv.Itoa(c.Writer.Size()))
+		}
 	}()
 	c.Next()
 }
