@@ -2,6 +2,8 @@ package gzip
 
 import (
 	"compress/gzip"
+	"errors"
+	"io"
 	"net/http"
 	"regexp"
 	"strings"
@@ -9,12 +11,15 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// DefaultExcludedExtentions is a predefined list of file extensions that should be excluded from gzip compression.
-// These extensions typically represent image files that are already compressed
-// and do not benefit from additional compression.
-var DefaultExcludedExtentions = NewExcludedExtensions([]string{
-	".png", ".gif", ".jpeg", ".jpg",
-})
+var (
+  // DefaultExcludedExtentions is a predefined list of file extensions that should be excluded from gzip compression.
+  // These extensions typically represent image files that are already compressed
+  // and do not benefit from additional compression.
+	DefaultExcludedExtentions = NewExcludedExtensions([]string{
+		".png", ".gif", ".jpeg", ".jpg",
+	})
+	UnsupportedContentEncoding = errors.New("Unsupported content encoding")
+)
 
 // Option is an interface that defines a method to apply a configuration
 // to a given config instance. Implementations of this interface can be
@@ -210,12 +215,53 @@ func DefaultDecompressHandle(c *gin.Context) {
 	if c.Request.Body == nil {
 		return
 	}
-	r, err := gzip.NewReader(c.Request.Body)
-	if err != nil {
-		_ = c.AbortWithError(http.StatusBadRequest, err)
+
+	contentEncodingField := strings.Split(strings.ToLower(c.GetHeader("Content-Encoding")), ",")
+	if len(contentEncodingField) == 0 { // nothing to decompress
+		c.Next()
+
 		return
 	}
+
+	toClose := make([]io.Closer, 0, len(contentEncodingField))
+	defer func() {
+		for i := len(toClose); i > 0; i-- {
+			toClose[i-1].Close()
+		}
+	}()
+
+	// parses multiply gzips like
+	// Content-Encoding: gzip, gzip, gzip
+	// allowed by RFC
+	for i := 0; i < len(contentEncodingField); i++ {
+		trimmedValue := strings.TrimSpace(contentEncodingField[i])
+
+		if trimmedValue == "" {
+			continue
+		}
+
+		if trimmedValue != "gzip" {
+			// https://www.rfc-editor.org/rfc/rfc7231#section-3.1.2.2
+			// An origin server MAY respond with a status code of 415 (Unsupported
+			// Media Type) if a representation in the request message has a content
+			// coding that is not acceptable.
+			_ = c.AbortWithError(http.StatusUnsupportedMediaType, UnsupportedContentEncoding)
+		}
+
+		r, err := gzip.NewReader(c.Request.Body)
+		if err != nil {
+			_ = c.AbortWithError(http.StatusBadRequest, err)
+
+			return
+		}
+
+		toClose = append(toClose, c.Request.Body)
+
+		c.Request.Body = r
+	}
+
 	c.Request.Header.Del("Content-Encoding")
 	c.Request.Header.Del("Content-Length")
-	c.Request.Body = r
+
+	c.Next()
 }
