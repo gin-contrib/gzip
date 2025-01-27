@@ -12,13 +12,15 @@ import (
 )
 
 var (
-  // DefaultExcludedExtentions is a predefined list of file extensions that should be excluded from gzip compression.
-  // These extensions typically represent image files that are already compressed
-  // and do not benefit from additional compression.
+	// DefaultExcludedExtentions is a predefined list of file extensions that should be excluded from gzip compression.
+	// These extensions typically represent image files that are already compressed
+	// and do not benefit from additional compression.
 	DefaultExcludedExtentions = NewExcludedExtensions([]string{
 		".png", ".gif", ".jpeg", ".jpg",
 	})
-	UnsupportedContentEncoding = errors.New("Unsupported content encoding")
+	// ErrUnsupportedContentEncoding is an error that indicates the content encoding
+	// is not supported by the application.
+	ErrUnsupportedContentEncoding = errors.New("unsupported content encoding")
 )
 
 // Option is an interface that defines a method to apply a configuration
@@ -241,11 +243,12 @@ func DefaultDecompressHandle(c *gin.Context) {
 		}
 
 		if trimmedValue != "gzip" {
+			// According to RFC 7231, Section 3.1.2.2:
 			// https://www.rfc-editor.org/rfc/rfc7231#section-3.1.2.2
 			// An origin server MAY respond with a status code of 415 (Unsupported
 			// Media Type) if a representation in the request message has a content
 			// coding that is not acceptable.
-			_ = c.AbortWithError(http.StatusUnsupportedMediaType, UnsupportedContentEncoding)
+			_ = c.AbortWithError(http.StatusUnsupportedMediaType, ErrUnsupportedContentEncoding)
 		}
 
 		r, err := gzip.NewReader(c.Request.Body)
