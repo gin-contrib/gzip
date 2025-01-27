@@ -20,11 +20,6 @@ func main() {
 			gzip.DefaultCompression,
 			gzip.WithExcludedPaths([]string{"/ping2"}),
 		))
-	r.Use(func(c *gin.Context) {
-		log.Println("Request received")
-		c.Next()
-		log.Println("Response sent")
-	})
 
 	r.GET("/ping", func(c *gin.Context) {
 		c.String(http.StatusOK, "pong "+fmt.Sprint(time.Now().Unix()))
