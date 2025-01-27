@@ -48,10 +48,7 @@ func newGzipHandler(level int, opts ...Option) *gzipHandler {
 		config: cfg,
 		gzPool: sync.Pool{
 			New: func() interface{} {
-				gz, err := gzip.NewWriterLevel(io.Discard, level)
-				if err != nil {
-					panic(err)
-				}
+				gz, _ := gzip.NewWriterLevel(io.Discard, level)
 				return gz
 			},
 		},
@@ -79,8 +76,8 @@ func (g *gzipHandler) Handle(c *gin.Context) {
 
 	gz := g.gzPool.Get().(*gzip.Writer)
 	defer func() {
-		g.gzPool.Put(gz)
 		gz.Reset(io.Discard)
+		g.gzPool.Put(gz)
 	}()
 	gz.Reset(c.Writer)
 
