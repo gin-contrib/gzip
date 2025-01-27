@@ -12,10 +12,14 @@ import (
 
 func main() {
 	r := gin.Default()
-	r.Use(gzip.Gzip(
-		gzip.DefaultCompression,
-		gzip.WithExcludedPaths([]string{"/ping2"}),
-	))
+	r.Use(
+		func(c *gin.Context) {
+			c.Writer.Header().Add("Vary", "Origin")
+		},
+		gzip.Gzip(
+			gzip.DefaultCompression,
+			gzip.WithExcludedPaths([]string{"/ping2"}),
+		))
 	r.Use(func(c *gin.Context) {
 		log.Println("Request received")
 		c.Next()

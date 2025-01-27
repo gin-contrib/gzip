@@ -59,10 +59,39 @@ func newServer() *gin.Engine {
 		c.Header("Content-Length", strconv.Itoa(len(testResponse)))
 		c.String(200, testResponse)
 	})
+	router.GET("/ping", func(c *gin.Context) {
+		c.Writer.Header().Add("Vary", "Origin")
+	}, func(c *gin.Context) {
+		c.Header("Content-Length", strconv.Itoa(len(testResponse)))
+		c.String(200, testResponse)
+	})
 	router.Any("/reverse", func(c *gin.Context) {
 		rp.ServeHTTP(c.Writer, c.Request)
 	})
 	return router
+}
+
+func TestVaryHeader(t *testing.T) {
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/ping", nil)
+	req.Header.Add(headerAcceptEncoding, "gzip")
+
+	w := httptest.NewRecorder()
+	r := newServer()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, 200, w.Code)
+	assert.Equal(t, "gzip", w.Header().Get(headerContentEncoding))
+	assert.Equal(t, []string{headerAcceptEncoding, "Origin"}, w.Header().Values(headerVary))
+	assert.NotEqual(t, "0", w.Header().Get("Content-Length"))
+	assert.NotEqual(t, 19, w.Body.Len())
+	assert.Equal(t, w.Header().Get("Content-Length"), fmt.Sprint(w.Body.Len()))
+
+	gr, err := gzip.NewReader(w.Body)
+	assert.NoError(t, err)
+	defer gr.Close()
+
+	body, _ := io.ReadAll(gr)
+	assert.Equal(t, testResponse, string(body))
 }
 
 func TestGzip(t *testing.T) {

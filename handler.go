@@ -85,7 +85,7 @@ func (g *gzipHandler) Handle(c *gin.Context) {
 	gz.Reset(c.Writer)
 
 	c.Header(headerContentEncoding, "gzip")
-	c.Header(headerVary, headerAcceptEncoding)
+	c.Writer.Header().Add(headerVary, headerAcceptEncoding)
 	c.Writer = &gzipWriter{c.Writer, gz}
 	defer func() {
 		if c.Writer.Size() < 0 {
