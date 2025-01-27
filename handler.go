@@ -75,10 +75,6 @@ func (g *gzipHandler) Handle(c *gin.Context) {
 	}
 
 	gz := g.gzPool.Get().(*gzip.Writer)
-	defer func() {
-		gz.Reset(io.Discard)
-		g.gzPool.Put(gz)
-	}()
 	gz.Reset(c.Writer)
 
 	c.Header(headerContentEncoding, "gzip")
@@ -98,6 +94,7 @@ func (g *gzipHandler) Handle(c *gin.Context) {
 		if c.Writer.Size() > -1 {
 			c.Header("Content-Length", strconv.Itoa(c.Writer.Size()))
 		}
+		g.gzPool.Put(gz)
 	}()
 	c.Next()
 }
