@@ -86,6 +86,11 @@ func (g *gzipHandler) Handle(c *gin.Context) {
 
 	c.Header(headerContentEncoding, "gzip")
 	c.Writer.Header().Add(headerVary, headerAcceptEncoding)
+	// check ETag Header
+	originalEtag := c.GetHeader("ETag")
+	if originalEtag != "" && !strings.HasPrefix(originalEtag, "W/") {
+		c.Header("ETag", "W/"+originalEtag)
+	}
 	c.Writer = &gzipWriter{c.Writer, gz}
 	defer func() {
 		if c.Writer.Size() < 0 {
