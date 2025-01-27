@@ -18,9 +18,6 @@ var (
 	DefaultExcludedExtentions = NewExcludedExtensions([]string{
 		".png", ".gif", ".jpeg", ".jpg",
 	})
-	DefaultOptions = &Options{
-		ExcludedExtensions: DefaultExcludedExtentions,
-	}
 	UnsupportedContentEncoding = errors.New("Unsupported content encoding")
 )
 
