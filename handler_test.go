@@ -99,3 +99,44 @@ func TestHandleDecompressGzip(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "ok", w.Body.String())
 }
+
+// Test for issue https://github.com/gin-contrib/gzip/issues/108
+func TestHandleDecompressRequestAndCompressResponseGzip(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	buf := &bytes.Buffer{}
+	gz, _ := gzip.NewWriterLevel(buf, gzip.DefaultCompression)
+	if _, err := gz.Write([]byte("Gzip Test Response")); err != nil {
+		gz.Close()
+		t.Fatal(err)
+	}
+	gz.Close()
+
+	router := gin.New()
+	router.Use(Gzip(DefaultCompression, WithDecompressFn(DefaultDecompressHandle)))
+	router.POST("/", func(c *gin.Context) {
+		data, err := c.GetRawData()
+		assert.NoError(t, err)
+		assert.Equal(t, "Gzip Test Response", string(data))
+		c.String(http.StatusOK, "ok")
+	})
+
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/", buf)
+	req.Header.Set("Content-Encoding", "gzip")
+	// Due to issue #108, decompressing a request body as well as compressing a response body causes the following response:
+	// "ok\x1f\x8b\b\x00\x00\x00\x00\x00\x00\xff\x01\x00\x00\xff\xff\x00\x00\x00\x00\x00\x00\x00\x00"
+	// Removing c.Next() from DefaultDecompressHandle() allows the gzip.Writer to be set before the handler runs and solves the issue.
+	req.Header.Set("Accept-Encoding", "gzip")
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	gr, err := gzip.NewReader(w.Body)
+	assert.NoError(t, err)
+	defer gr.Close()
+
+	body, _ := io.ReadAll(gr)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "ok", string(body))
+}
