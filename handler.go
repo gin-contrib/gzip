@@ -89,6 +89,10 @@ func (g *gzipHandler) Handle(c *gin.Context) {
 		if c.Writer.Size() < 0 {
 			// do not write gzip footer when nothing is written to the response body
 			gz.Reset(io.Discard)
+
+			// revert back to the original gin ResponseWriter to allow gin to handle the empty response (i.e. 404)
+			c.Writer = c.Writer.(*gzipWriter).ResponseWriter
+			c.Header(headerContentEncoding, "")
 		}
 		_ = gz.Close()
 		if c.Writer.Size() > -1 {

@@ -52,7 +52,7 @@ func TestHandleGzip(t *testing.T) {
 			name:                    "Bad path, with compression",
 			path:                    "/bad-path",
 			acceptEncoding:          "gzip",
-			expectedContentEncoding: "gzip",
+			expectedContentEncoding: "",
 			expectedBody:            "404 page not found",
 			expectedStatus:          http.StatusNotFound,
 		},
