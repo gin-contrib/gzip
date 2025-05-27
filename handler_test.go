@@ -22,6 +22,7 @@ func TestHandleGzip(t *testing.T) {
 		acceptEncoding          string
 		expectedContentEncoding string
 		expectedBody            string
+		expectedStatus          int
 	}{
 		{
 			name:                    "Gzip compression",
@@ -29,6 +30,7 @@ func TestHandleGzip(t *testing.T) {
 			acceptEncoding:          "gzip",
 			expectedContentEncoding: "gzip",
 			expectedBody:            "Gzip Test Response",
+			expectedStatus:          http.StatusOK,
 		},
 		{
 			name:                    "No compression",
@@ -36,6 +38,23 @@ func TestHandleGzip(t *testing.T) {
 			acceptEncoding:          "",
 			expectedContentEncoding: "",
 			expectedBody:            "Gzip Test Response",
+			expectedStatus:          http.StatusOK,
+		},
+		{
+			name:                    "Bad path, no compression",
+			path:                    "/bad-path",
+			acceptEncoding:          "",
+			expectedContentEncoding: "",
+			expectedBody:            "404 page not found",
+			expectedStatus:          http.StatusNotFound,
+		},
+		{
+			name:                    "Bad path, with compression",
+			path:                    "/bad-path",
+			acceptEncoding:          "gzip",
+			expectedContentEncoding: "gzip",
+			expectedBody:            "404 page not found",
+			expectedStatus:          http.StatusNotFound,
 		},
 	}
 
@@ -53,7 +72,7 @@ func TestHandleGzip(t *testing.T) {
 			w := httptest.NewRecorder()
 			router.ServeHTTP(w, req)
 
-			assert.Equal(t, http.StatusOK, w.Code)
+			assert.Equal(t, tt.expectedStatus, w.Code)
 			assert.Equal(t, tt.expectedContentEncoding, w.Header().Get("Content-Encoding"))
 
 			if tt.expectedContentEncoding == "gzip" {
