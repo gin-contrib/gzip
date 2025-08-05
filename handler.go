@@ -84,13 +84,27 @@ func (g *gzipHandler) Handle(c *gin.Context) {
 	if originalEtag != "" && !strings.HasPrefix(originalEtag, "W/") {
 		c.Header("ETag", "W/"+originalEtag)
 	}
-	c.Writer = &gzipWriter{c.Writer, gz}
+	gzWriter := gzipWriter{
+		ResponseWriter: c.Writer,
+		writer:         gz,
+		minLength:      g.minLength,
+	}
+	c.Writer = &gzWriter
 	defer func() {
+		// if compression limit not met after all write commands were executed, then the response data is stored in the
+		// internal buffer which should now be written to the response writer directly
+		if !gzWriter.shouldCompress {
+			c.Writer.Header().Del(headerContentEncoding)
+			c.Writer.Header().Del(headerVary)
+			_, _ = gzWriter.ResponseWriter.Write(gzWriter.buffer.Bytes())
+			gzWriter.writer.Reset(io.Discard)
+		}
+
 		if c.Writer.Size() < 0 {
 			// do not write gzip footer when nothing is written to the response body
-			gz.Reset(io.Discard)
+			gzWriter.writer.Reset(io.Discard)
 		}
-		_ = gz.Close()
+		_ = gzWriter.writer.Close()
 		if c.Writer.Size() > -1 {
 			c.Header("Content-Length", strconv.Itoa(c.Writer.Size()))
 		}
