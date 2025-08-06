@@ -265,6 +265,4 @@ func DefaultDecompressHandle(c *gin.Context) {
 
 	c.Request.Header.Del("Content-Encoding")
 	c.Request.Header.Del("Content-Length")
-
-	c.Next()
 }
