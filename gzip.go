@@ -50,6 +50,29 @@ func (g *gzipWriter) Write(data []byte) (int, error) {
 	return g.writer.Write(data)
 }
 
+// Status returns the HTTP response status code
+func (g *gzipWriter) Status() int {
+	if g.statusWritten {
+		return g.status
+	}
+	return g.ResponseWriter.Status()
+}
+
+// Size returns the number of bytes already written into the response http body
+func (g *gzipWriter) Size() int {
+	return g.ResponseWriter.Size()
+}
+
+// Written returns true if the response body was already written
+func (g *gzipWriter) Written() bool {
+	return g.ResponseWriter.Written()
+}
+
+// WriteHeaderNow forces to write the http header
+func (g *gzipWriter) WriteHeaderNow() {
+	g.ResponseWriter.WriteHeaderNow()
+}
+
 // removeGzipHeaders removes compression-related headers for error responses
 func (g *gzipWriter) removeGzipHeaders() {
 	g.Header().Del("Content-Encoding")
