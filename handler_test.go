@@ -99,3 +99,59 @@ func TestHandleDecompressGzip(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "ok", w.Body.String())
 }
+
+func TestHandle404NoCompression(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	tests := []struct {
+		name           string
+		acceptEncoding string
+		expectedGzip   bool
+	}{
+		{
+			name:           "404 with gzip accept-encoding should not compress",
+			acceptEncoding: "gzip",
+			expectedGzip:   false,
+		},
+		{
+			name:           "404 without gzip accept-encoding",
+			acceptEncoding: "",
+			expectedGzip:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			router := gin.New()
+			router.Use(Gzip(DefaultCompression))
+			// Register a route to get proper 404 for unmatched paths
+			router.NoRoute(func(c *gin.Context) {
+				c.String(http.StatusNotFound, "404 page not found")
+			})
+
+			req, _ := http.NewRequestWithContext(context.Background(), "GET", "/nonexistent", nil)
+			if tt.acceptEncoding != "" {
+				req.Header.Set(headerAcceptEncoding, tt.acceptEncoding)
+			}
+
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, http.StatusNotFound, w.Code)
+
+			// Check that Content-Encoding header is not set for 404 responses
+			contentEncoding := w.Header().Get("Content-Encoding")
+			if tt.expectedGzip {
+				assert.Equal(t, "gzip", contentEncoding)
+			} else {
+				assert.Empty(t, contentEncoding, "404 responses should not have Content-Encoding: gzip")
+			}
+
+			// Verify that Vary header is also not set for uncompressed 404 responses
+			if !tt.expectedGzip {
+				vary := w.Header().Get("Vary")
+				assert.Empty(t, vary, "404 responses should not have Vary header when not compressed")
+			}
+		})
+	}
+}

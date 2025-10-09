@@ -24,17 +24,60 @@ func Gzip(level int, options ...Option) gin.HandlerFunc {
 
 type gzipWriter struct {
 	gin.ResponseWriter
-	writer *gzip.Writer
+	writer        *gzip.Writer
+	statusWritten bool
+	status        int
 }
 
 func (g *gzipWriter) WriteString(s string) (int, error) {
-	g.Header().Del("Content-Length")
-	return g.writer.Write([]byte(s))
+	return g.Write([]byte(s))
 }
 
 func (g *gzipWriter) Write(data []byte) (int, error) {
 	g.Header().Del("Content-Length")
+
+	// Check status from ResponseWriter if not set via WriteHeader
+	if !g.statusWritten {
+		g.status = g.ResponseWriter.Status()
+	}
+
+	// For error responses (4xx, 5xx), don't compress
+	if g.status >= 400 {
+		g.removeGzipHeaders()
+		return g.ResponseWriter.Write(data)
+	}
+
 	return g.writer.Write(data)
+}
+
+// Status returns the HTTP response status code
+func (g *gzipWriter) Status() int {
+	if g.statusWritten {
+		return g.status
+	}
+	return g.ResponseWriter.Status()
+}
+
+// Size returns the number of bytes already written into the response http body
+func (g *gzipWriter) Size() int {
+	return g.ResponseWriter.Size()
+}
+
+// Written returns true if the response body was already written
+func (g *gzipWriter) Written() bool {
+	return g.ResponseWriter.Written()
+}
+
+// WriteHeaderNow forces to write the http header
+func (g *gzipWriter) WriteHeaderNow() {
+	g.ResponseWriter.WriteHeaderNow()
+}
+
+// removeGzipHeaders removes compression-related headers for error responses
+func (g *gzipWriter) removeGzipHeaders() {
+	g.Header().Del("Content-Encoding")
+	g.Header().Del("Vary")
+	g.Header().Del("ETag")
 }
 
 func (g *gzipWriter) Flush() {
@@ -44,6 +87,14 @@ func (g *gzipWriter) Flush() {
 
 // Fix: https://github.com/mholt/caddy/issues/38
 func (g *gzipWriter) WriteHeader(code int) {
+	g.status = code
+	g.statusWritten = true
+
+	// Remove gzip headers for error responses
+	if code >= 400 {
+		g.removeGzipHeaders()
+	}
+
 	g.Header().Del("Content-Length")
 	g.ResponseWriter.WriteHeader(code)
 }
