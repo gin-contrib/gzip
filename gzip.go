@@ -42,6 +42,7 @@ func (g *gzipWriter) Write(data []byte) (int, error) {
 	}
 
 	// For error responses (4xx, 5xx), don't compress
+	// Always check the current status, even if WriteHeader was called
 	if g.status >= 400 {
 		g.removeGzipHeaders()
 		return g.ResponseWriter.Write(data)
@@ -90,10 +91,9 @@ func (g *gzipWriter) WriteHeader(code int) {
 	g.status = code
 	g.statusWritten = true
 
-	// Remove gzip headers for error responses
-	if code >= 400 {
-		g.removeGzipHeaders()
-	}
+	// Don't remove gzip headers immediately for error responses in WriteHeader
+	// because some handlers (like static file server) may call WriteHeader multiple times
+	// We'll check the status in Write() method when content is actually written
 
 	g.Header().Del("Content-Length")
 	g.ResponseWriter.WriteHeader(code)
