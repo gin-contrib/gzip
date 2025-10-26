@@ -149,7 +149,7 @@ func TestStaticFileGzipHeadersBug(t *testing.T) {
 	// Create a test file
 	testFile := filepath.Join(tmpDir, "test.js")
 	testContent := "console.log('This is a JavaScript file that should be compressed when served as a static file');"
-	err = os.WriteFile(testFile, []byte(testContent), 0o644)
+	err = os.WriteFile(testFile, []byte(testContent), 0o600)
 	require.NoError(t, err)
 
 	// Set up Gin router with gzip middleware and static file serving
