@@ -121,3 +121,4 @@ func (g *gzipHandler) shouldCompress(req *http.Request) bool {
 
 	return true
 }
+

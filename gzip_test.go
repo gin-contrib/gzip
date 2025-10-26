@@ -422,3 +422,138 @@ func TestResponseWriterHijack(t *testing.T) {
 	router.ServeHTTP(hijackable, req)
 	assert.True(t, hijackable.Hijacked)
 }
+
+func TestDoubleGzipCompression(t *testing.T) {
+	// Create a test server that returns gzip-compressed content
+	compressedServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Compress the response body
+		buf := &bytes.Buffer{}
+		gz := gzip.NewWriter(buf)
+		_, err := gz.Write([]byte(testReverseResponse))
+		require.NoError(t, err)
+		require.NoError(t, gz.Close())
+
+		// Set gzip headers to simulate already compressed content
+		w.Header().Set(headerContentEncoding, "gzip")
+		w.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
+		w.WriteHeader(200)
+		_, err = w.Write(buf.Bytes())
+		require.NoError(t, err)
+	}))
+	defer compressedServer.Close()
+
+	// Parse the server URL for the reverse proxy
+	target, err := url.Parse(compressedServer.URL)
+	require.NoError(t, err)
+	rp := httputil.NewSingleHostReverseProxy(target)
+
+	// Create gin router with gzip middleware
+	router := gin.New()
+	router.Use(Gzip(DefaultCompression))
+	router.Any("/proxy", func(c *gin.Context) {
+		rp.ServeHTTP(c.Writer, c.Request)
+	})
+
+	// Make request through the proxy
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/proxy", nil)
+	req.Header.Add(headerAcceptEncoding, "gzip")
+
+	w := newCloseNotifyingRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, 200, w.Code)
+
+	// Check if response is compressed - should still be gzip since upstream provided gzip
+	// But it should NOT be double compressed
+	responseBody := w.Body.Bytes()
+
+	// First check if the response body looks like gzip (starts with gzip magic number)
+	if len(responseBody) >= 2 && responseBody[0] == 0x1f && responseBody[1] == 0x8b {
+		// Response is gzip compressed, try to decompress once
+		gr, err := gzip.NewReader(bytes.NewReader(responseBody))
+		assert.NoError(t, err, "Response should be decompressible with single gzip decompression")
+		defer gr.Close()
+
+		body, err := io.ReadAll(gr)
+		assert.NoError(t, err)
+		assert.Equal(t, testReverseResponse, string(body), "Response should match original content after single decompression")
+
+		// Ensure no double compression - decompressed content should not be gzip
+		if len(body) >= 2 && body[0] == 0x1f && body[1] == 0x8b {
+			t.Error("Response appears to be double-compressed - single decompression revealed another gzip stream")
+		}
+	} else {
+		// Response is not gzip compressed, check if content matches
+		assert.Equal(t, testReverseResponse, w.Body.String(), "Uncompressed response should match original content")
+	}
+}
+
+func TestPrometheusMetricsDoubleCompression(t *testing.T) {
+	// Simulate Prometheus metrics server that returns gzip-compressed metrics
+	prometheusData := `# HELP http_requests_total Total number of HTTP requests
+# TYPE http_requests_total counter
+http_requests_total{method="get",status="200"} 1027 1395066363000
+http_requests_total{method="get",status="400"} 3 1395066363000`
+
+	prometheusServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Prometheus server compresses its own response
+		buf := &bytes.Buffer{}
+		gz := gzip.NewWriter(buf)
+		_, err := gz.Write([]byte(prometheusData))
+		require.NoError(t, err)
+		require.NoError(t, gz.Close())
+
+		w.Header().Set(headerContentEncoding, "gzip")
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+		w.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
+		w.WriteHeader(200)
+		_, err = w.Write(buf.Bytes())
+		require.NoError(t, err)
+	}))
+	defer prometheusServer.Close()
+
+	// Create reverse proxy to Prometheus server
+	target, err := url.Parse(prometheusServer.URL)
+	require.NoError(t, err)
+	rp := httputil.NewSingleHostReverseProxy(target)
+
+	// Create gin router with gzip middleware (like what would happen in a gateway)
+	router := gin.New()
+	router.Use(Gzip(DefaultCompression))
+	router.Any("/metrics", func(c *gin.Context) {
+		rp.ServeHTTP(c.Writer, c.Request)
+	})
+
+	// Simulate Prometheus scraper request
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/metrics", nil)
+	req.Header.Add(headerAcceptEncoding, "gzip")
+	req.Header.Add("User-Agent", "Prometheus/2.37.0")
+
+	w := newCloseNotifyingRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, 200, w.Code)
+
+	// Check if response is gzip compressed and handle accordingly
+	responseBody := w.Body.Bytes()
+
+	// First check if the response body looks like gzip (starts with gzip magic number)
+	if len(responseBody) >= 2 && responseBody[0] == 0x1f && responseBody[1] == 0x8b {
+		// Response is gzip compressed, try to decompress once
+		gr, err := gzip.NewReader(bytes.NewReader(responseBody))
+		assert.NoError(t, err, "Prometheus should be able to decompress the metrics response")
+		defer gr.Close()
+
+		body, err := io.ReadAll(gr)
+		assert.NoError(t, err)
+		assert.Equal(t, prometheusData, string(body), "Metrics content should be correct after decompression")
+
+		// Verify no double compression - decompressed content should not be gzip
+		if len(body) >= 2 && body[0] == 0x1f && body[1] == 0x8b {
+			t.Error("Metrics response appears to be double-compressed - Prometheus scraping would fail")
+		}
+	} else {
+		// Response is not gzip compressed, check if content matches
+		assert.Equal(t, prometheusData, w.Body.String(), "Uncompressed metrics should match original content")
+	}
+}
