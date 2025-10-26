@@ -13,6 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const gzipEncoding = "gzip"
+
 func TestHandleGzip(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -26,8 +28,8 @@ func TestHandleGzip(t *testing.T) {
 		{
 			name:                    "Gzip compression",
 			path:                    "/",
-			acceptEncoding:          "gzip",
-			expectedContentEncoding: "gzip",
+			acceptEncoding:          gzipEncoding,
+			expectedContentEncoding: gzipEncoding,
 			expectedBody:            "Gzip Test Response",
 		},
 		{
@@ -56,7 +58,7 @@ func TestHandleGzip(t *testing.T) {
 			assert.Equal(t, http.StatusOK, w.Code)
 			assert.Equal(t, tt.expectedContentEncoding, w.Header().Get("Content-Encoding"))
 
-			if tt.expectedContentEncoding == "gzip" {
+			if tt.expectedContentEncoding == gzipEncoding {
 				gr, err := gzip.NewReader(w.Body)
 				assert.NoError(t, err)
 				defer gr.Close()
@@ -91,7 +93,7 @@ func TestHandleDecompressGzip(t *testing.T) {
 	})
 
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/", buf)
-	req.Header.Set("Content-Encoding", "gzip")
+	req.Header.Set("Content-Encoding", gzipEncoding)
 
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -110,7 +112,7 @@ func TestHandle404NoCompression(t *testing.T) {
 	}{
 		{
 			name:           "404 with gzip accept-encoding should not compress",
-			acceptEncoding: "gzip",
+			acceptEncoding: gzipEncoding,
 			expectedGzip:   false,
 		},
 		{
@@ -142,7 +144,7 @@ func TestHandle404NoCompression(t *testing.T) {
 			// Check that Content-Encoding header is not set for 404 responses
 			contentEncoding := w.Header().Get("Content-Encoding")
 			if tt.expectedGzip {
-				assert.Equal(t, "gzip", contentEncoding)
+				assert.Equal(t, gzipEncoding, contentEncoding)
 			} else {
 				assert.Empty(t, contentEncoding, "404 responses should not have Content-Encoding: gzip")
 			}
