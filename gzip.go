@@ -16,6 +16,7 @@ const (
 	DefaultCompression = gzip.DefaultCompression
 	NoCompression      = gzip.NoCompression
 	HuffmanOnly        = gzip.HuffmanOnly
+	gzipEncoding       = "gzip"
 )
 
 func Gzip(level int, options ...Option) gin.HandlerFunc {
@@ -46,6 +47,21 @@ func (g *gzipWriter) Write(data []byte) (int, error) {
 	if g.status >= 400 {
 		g.removeGzipHeaders()
 		return g.ResponseWriter.Write(data)
+	}
+
+	// Check if response is already gzip-compressed by looking at Content-Encoding header
+	// If upstream handler already set gzip encoding, pass through without double compression
+	if contentEncoding := g.Header().Get("Content-Encoding"); contentEncoding != "" && contentEncoding != gzipEncoding {
+		// Different encoding, remove our gzip headers and pass through
+		g.removeGzipHeaders()
+		return g.ResponseWriter.Write(data)
+	} else if contentEncoding == "gzip" {
+		// Already gzip encoded by upstream, check if this looks like gzip data
+		if len(data) >= 2 && data[0] == 0x1f && data[1] == 0x8b {
+			// This is already gzip data, remove our headers and pass through
+			g.removeGzipHeaders()
+			return g.ResponseWriter.Write(data)
+		}
 	}
 
 	return g.writer.Write(data)

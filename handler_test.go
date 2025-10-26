@@ -13,8 +13,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-const gzipEncoding = "gzip"
-
 func TestHandleGzip(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
