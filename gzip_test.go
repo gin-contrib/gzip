@@ -476,11 +476,13 @@ func TestDoubleGzipCompression(t *testing.T) {
 
 		body, err := io.ReadAll(gr)
 		assert.NoError(t, err)
-		assert.Equal(t, testReverseResponse, string(body), "Response should match original content after single decompression")
+		assert.Equal(t, testReverseResponse, string(body),
+			"Response should match original content after single decompression")
 
 		// Ensure no double compression - decompressed content should not be gzip
 		if len(body) >= 2 && body[0] == 0x1f && body[1] == 0x8b {
-			t.Error("Response appears to be double-compressed - single decompression revealed another gzip stream")
+			t.Error("Response appears to be double-compressed - " +
+				"single decompression revealed another gzip stream")
 		}
 	} else {
 		// Response is not gzip compressed, check if content matches

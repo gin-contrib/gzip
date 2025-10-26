@@ -179,9 +179,9 @@ func TestStaticFileGzipHeadersBug(t *testing.T) {
 	// - Content-Encoding header will be empty instead of "gzip"
 	// - Vary header will be empty instead of "Accept-Encoding"
 	// - Content will not be compressed
-	if w.Header().Get(headerContentEncoding) != "gzip" {
+	if w.Header().Get(headerContentEncoding) != gzipEncoding {
 		t.Errorf("BUG REPRODUCED: Static file is not being gzip compressed. Content-Encoding: %q, expected: %q",
-			w.Header().Get(headerContentEncoding), "gzip")
+			w.Header().Get(headerContentEncoding), gzipEncoding)
 	}
 
 	if w.Header().Get(headerVary) != headerAcceptEncoding {
