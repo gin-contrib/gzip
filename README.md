@@ -1,6 +1,7 @@
 # GZIP gin's middleware
 
 [![Run Tests](https://github.com/gin-contrib/gzip/actions/workflows/go.yml/badge.svg)](https://github.com/gin-contrib/gzip/actions/workflows/go.yml)
+[![Trivy Security Scan](https://github.com/gin-contrib/gzip/actions/workflows/trivy-scan.yml/badge.svg)](https://github.com/gin-contrib/gzip/actions/workflows/trivy-scan.yml)
 [![codecov](https://codecov.io/gh/gin-contrib/gzip/branch/master/graph/badge.svg)](https://codecov.io/gh/gin-contrib/gzip)
 [![Go Report Card](https://goreportcard.com/badge/github.com/gin-contrib/gzip)](https://goreportcard.com/report/github.com/gin-contrib/gzip)
 [![GoDoc](https://godoc.org/github.com/gin-contrib/gzip?status.svg)](https://godoc.org/github.com/gin-contrib/gzip)
