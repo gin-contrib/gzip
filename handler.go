@@ -15,7 +15,9 @@ import (
 const (
 	headerAcceptEncoding  = "Accept-Encoding"
 	headerContentEncoding = "Content-Encoding"
+	headerContentLength   = "Content-Length"
 	headerVary            = "Vary"
+	headerETag            = "ETag"
 )
 
 type gzipHandler struct {
@@ -64,7 +66,7 @@ func newGzipHandler(level int, opts ...Option) *gzipHandler {
 // and wraps the response writer with a gzipWriter. After the request is processed, it ensures the gzip.Writer
 // is properly closed and the "Content-Length" header is set based on the response size.
 func (g *gzipHandler) Handle(c *gin.Context) {
-	if fn := g.decompressFn; fn != nil && strings.Contains(c.Request.Header.Get("Content-Encoding"), "gzip") {
+	if fn := g.decompressFn; fn != nil && strings.Contains(c.Request.Header.Get(headerContentEncoding), "gzip") {
 		fn(c)
 	}
 
@@ -80,9 +82,9 @@ func (g *gzipHandler) Handle(c *gin.Context) {
 	c.Header(headerContentEncoding, "gzip")
 	c.Writer.Header().Add(headerVary, headerAcceptEncoding)
 	// check ETag Header
-	originalEtag := c.GetHeader("ETag")
+	originalEtag := c.GetHeader(headerETag)
 	if originalEtag != "" && !strings.HasPrefix(originalEtag, "W/") {
-		c.Header("ETag", "W/"+originalEtag)
+		c.Header(headerETag, "W/"+originalEtag)
 	}
 	gw := &gzipWriter{ResponseWriter: c.Writer, writer: gz}
 	c.Writer = gw
@@ -98,7 +100,7 @@ func (g *gzipHandler) Handle(c *gin.Context) {
 		}
 		_ = gz.Close()
 		if c.Writer.Size() > -1 {
-			c.Header("Content-Length", strconv.Itoa(c.Writer.Size()))
+			c.Header(headerContentLength, strconv.Itoa(c.Writer.Size()))
 		}
 		g.gzPool.Put(gz)
 	}()

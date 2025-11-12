@@ -56,13 +56,13 @@ func newServer() *gin.Engine {
 	router := gin.New()
 	router.Use(Gzip(DefaultCompression))
 	router.GET("/", func(c *gin.Context) {
-		c.Header("Content-Length", strconv.Itoa(len(testResponse)))
+		c.Header(headerContentLength, strconv.Itoa(len(testResponse)))
 		c.String(200, testResponse)
 	})
 	router.GET("/ping", func(c *gin.Context) {
-		c.Writer.Header().Add("Vary", "Origin")
+		c.Writer.Header().Add(headerVary, "Origin")
 	}, func(c *gin.Context) {
-		c.Header("Content-Length", strconv.Itoa(len(testResponse)))
+		c.Header(headerContentLength, strconv.Itoa(len(testResponse)))
 		c.String(200, testResponse)
 	})
 	router.Any("/reverse", func(c *gin.Context) {
@@ -82,9 +82,9 @@ func TestVaryHeader(t *testing.T) {
 	assert.Equal(t, 200, w.Code)
 	assert.Equal(t, "gzip", w.Header().Get(headerContentEncoding))
 	assert.Equal(t, []string{headerAcceptEncoding, "Origin"}, w.Header().Values(headerVary))
-	assert.NotEqual(t, "0", w.Header().Get("Content-Length"))
+	assert.NotEqual(t, "0", w.Header().Get(headerContentLength))
 	assert.NotEqual(t, 19, w.Body.Len())
-	assert.Equal(t, w.Header().Get("Content-Length"), fmt.Sprint(w.Body.Len()))
+	assert.Equal(t, w.Header().Get(headerContentLength), fmt.Sprint(w.Body.Len()))
 
 	gr, err := gzip.NewReader(w.Body)
 	assert.NoError(t, err)
@@ -105,9 +105,9 @@ func TestGzip(t *testing.T) {
 	assert.Equal(t, w.Code, 200)
 	assert.Equal(t, w.Header().Get(headerContentEncoding), "gzip")
 	assert.Equal(t, w.Header().Get(headerVary), headerAcceptEncoding)
-	assert.NotEqual(t, w.Header().Get("Content-Length"), "0")
+	assert.NotEqual(t, w.Header().Get(headerContentLength), "0")
 	assert.NotEqual(t, w.Body.Len(), 19)
-	assert.Equal(t, fmt.Sprint(w.Body.Len()), w.Header().Get("Content-Length"))
+	assert.Equal(t, fmt.Sprint(w.Body.Len()), w.Header().Get(headerContentLength))
 
 	gr, err := gzip.NewReader(w.Body)
 	assert.NoError(t, err)
@@ -166,7 +166,7 @@ func TestExcludedPathsAndExtensions(t *testing.T) {
 		assert.Equal(t, tt.expectedContentEncoding, w.Header().Get(headerContentEncoding))
 		assert.Equal(t, tt.expectedVary, w.Header().Get(headerVary))
 		assert.Equal(t, tt.expectedBody, w.Body.String())
-		assert.Equal(t, tt.expectedContentLength, w.Header().Get("Content-Length"))
+		assert.Equal(t, tt.expectedContentLength, w.Header().Get(headerContentLength))
 	}
 }
 
@@ -179,7 +179,7 @@ func TestNoGzip(t *testing.T) {
 
 	assert.Equal(t, w.Code, 200)
 	assert.Equal(t, w.Header().Get(headerContentEncoding), "")
-	assert.Equal(t, w.Header().Get("Content-Length"), "19")
+	assert.Equal(t, w.Header().Get(headerContentLength), "19")
 	assert.Equal(t, w.Body.String(), testResponse)
 }
 
@@ -194,9 +194,9 @@ func TestGzipWithReverseProxy(t *testing.T) {
 	assert.Equal(t, w.Code, 200)
 	assert.Equal(t, w.Header().Get(headerContentEncoding), "gzip")
 	assert.Equal(t, w.Header().Get(headerVary), headerAcceptEncoding)
-	assert.NotEqual(t, w.Header().Get("Content-Length"), "0")
+	assert.NotEqual(t, w.Header().Get(headerContentLength), "0")
 	assert.NotEqual(t, w.Body.Len(), 19)
-	assert.Equal(t, fmt.Sprint(w.Body.Len()), w.Header().Get("Content-Length"))
+	assert.Equal(t, fmt.Sprint(w.Body.Len()), w.Header().Get(headerContentLength))
 
 	gr, err := gzip.NewReader(w.Body)
 	assert.NoError(t, err)
@@ -224,7 +224,7 @@ func TestDecompressGzip(t *testing.T) {
 		if v := c.Request.Header.Get(headerContentEncoding); v != "" {
 			t.Errorf("unexpected `Content-Encoding`: %s header", v)
 		}
-		if v := c.Request.Header.Get("Content-Length"); v != "" {
+		if v := c.Request.Header.Get(headerContentLength); v != "" {
 			t.Errorf("unexpected `Content-Length`: %s header", v)
 		}
 		data, err := c.GetRawData()
@@ -241,7 +241,7 @@ func TestDecompressGzip(t *testing.T) {
 	assert.Equal(t, "", w.Header().Get(headerContentEncoding))
 	assert.Equal(t, "", w.Header().Get(headerVary))
 	assert.Equal(t, testResponse, w.Body.String())
-	assert.Equal(t, "", w.Header().Get("Content-Length"))
+	assert.Equal(t, "", w.Header().Get(headerContentLength))
 }
 
 func TestDecompressGzipWithEmptyBody(t *testing.T) {
@@ -261,7 +261,7 @@ func TestDecompressGzipWithEmptyBody(t *testing.T) {
 	assert.Equal(t, "", w.Header().Get(headerContentEncoding))
 	assert.Equal(t, "", w.Header().Get(headerVary))
 	assert.Equal(t, "ok", w.Body.String())
-	assert.Equal(t, "", w.Header().Get("Content-Length"))
+	assert.Equal(t, "", w.Header().Get(headerContentLength))
 }
 
 func TestDecompressGzipWithIncorrectData(t *testing.T) {
@@ -298,7 +298,7 @@ func TestDecompressOnly(t *testing.T) {
 		if v := c.Request.Header.Get(headerContentEncoding); v != "" {
 			t.Errorf("unexpected `Content-Encoding`: %s header", v)
 		}
-		if v := c.Request.Header.Get("Content-Length"); v != "" {
+		if v := c.Request.Header.Get(headerContentLength); v != "" {
 			t.Errorf("unexpected `Content-Length`: %s header", v)
 		}
 		data, err := c.GetRawData()
@@ -315,7 +315,7 @@ func TestDecompressOnly(t *testing.T) {
 	assert.Equal(t, "", w.Header().Get(headerContentEncoding))
 	assert.Equal(t, "", w.Header().Get(headerVary))
 	assert.Equal(t, testResponse, w.Body.String())
-	assert.Equal(t, "", w.Header().Get("Content-Length"))
+	assert.Equal(t, "", w.Header().Get(headerContentLength))
 }
 
 func TestGzipWithDecompressOnly(t *testing.T) {
@@ -335,7 +335,7 @@ func TestGzipWithDecompressOnly(t *testing.T) {
 	r.Use(Gzip(NoCompression, WithDecompressOnly(), WithDecompressFn(DefaultDecompressHandle)))
 	r.POST("/", func(c *gin.Context) {
 		assert.Equal(t, c.Request.Header.Get(headerContentEncoding), "")
-		assert.Equal(t, c.Request.Header.Get("Content-Length"), "")
+		assert.Equal(t, c.Request.Header.Get(headerContentLength), "")
 		body, err := c.GetRawData()
 		if err != nil {
 			t.Fatal(err)
@@ -364,7 +364,7 @@ func TestCustomShouldCompressFn(t *testing.T) {
 		}),
 	))
 	router.GET("/", func(c *gin.Context) {
-		c.Header("Content-Length", strconv.Itoa(len(testResponse)))
+		c.Header(headerContentLength, strconv.Itoa(len(testResponse)))
 		c.String(200, testResponse)
 	})
 
@@ -373,7 +373,7 @@ func TestCustomShouldCompressFn(t *testing.T) {
 
 	assert.Equal(t, 200, w.Code)
 	assert.Equal(t, "", w.Header().Get(headerContentEncoding))
-	assert.Equal(t, "19", w.Header().Get("Content-Length"))
+	assert.Equal(t, "19", w.Header().Get(headerContentLength))
 	assert.Equal(t, testResponse, w.Body.String())
 }
 
@@ -414,7 +414,7 @@ func TestResponseWriterHijack(t *testing.T) {
 		c.Next()
 	}))
 	router.GET("/", func(c *gin.Context) {
-		c.Header("Content-Length", strconv.Itoa(len(testResponse)))
+		c.Header(headerContentLength, strconv.Itoa(len(testResponse)))
 		c.String(200, testResponse)
 	})
 
@@ -435,7 +435,7 @@ func TestDoubleGzipCompression(t *testing.T) {
 
 		// Set gzip headers to simulate already compressed content
 		w.Header().Set(headerContentEncoding, "gzip")
-		w.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
+		w.Header().Set(headerContentLength, strconv.Itoa(buf.Len()))
 		w.WriteHeader(200)
 		_, err = w.Write(buf.Bytes())
 		require.NoError(t, err)
@@ -507,7 +507,7 @@ http_requests_total{method="get",status="400"} 3 1395066363000`
 
 		w.Header().Set(headerContentEncoding, "gzip")
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
-		w.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
+		w.Header().Set(headerContentLength, strconv.Itoa(buf.Len()))
 		w.WriteHeader(200)
 		_, err = w.Write(buf.Bytes())
 		require.NoError(t, err)

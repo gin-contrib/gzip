@@ -168,7 +168,7 @@ func TestStaticFileGzipHeadersBug(t *testing.T) {
 	t.Logf("Response Status: %d", w.Code)
 	t.Logf("Content-Encoding: %s", w.Header().Get(headerContentEncoding))
 	t.Logf("Vary: %s", w.Header().Get(headerVary))
-	t.Logf("Content-Length: %s", w.Header().Get("Content-Length"))
+	t.Logf("Content-Length: %s", w.Header().Get(headerContentLength))
 	t.Logf("Body Length: %d", w.Body.Len())
 
 	// This test will currently fail due to the bug described in issue #122

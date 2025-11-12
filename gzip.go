@@ -35,7 +35,7 @@ func (g *gzipWriter) WriteString(s string) (int, error) {
 }
 
 func (g *gzipWriter) Write(data []byte) (int, error) {
-	g.Header().Del("Content-Length")
+	g.Header().Del(headerContentLength)
 
 	// Check status from ResponseWriter if not set via WriteHeader
 	if !g.statusWritten {
@@ -51,7 +51,7 @@ func (g *gzipWriter) Write(data []byte) (int, error) {
 
 	// Check if response is already gzip-compressed by looking at Content-Encoding header
 	// If upstream handler already set gzip encoding, pass through without double compression
-	if contentEncoding := g.Header().Get("Content-Encoding"); contentEncoding != "" && contentEncoding != gzipEncoding {
+	if contentEncoding := g.Header().Get(headerContentEncoding); contentEncoding != "" && contentEncoding != gzipEncoding {
 		// Different encoding, remove our gzip headers and pass through
 		g.removeGzipHeaders()
 		return g.ResponseWriter.Write(data)
@@ -92,9 +92,9 @@ func (g *gzipWriter) WriteHeaderNow() {
 
 // removeGzipHeaders removes compression-related headers for error responses
 func (g *gzipWriter) removeGzipHeaders() {
-	g.Header().Del("Content-Encoding")
-	g.Header().Del("Vary")
-	g.Header().Del("ETag")
+	g.Header().Del(headerContentEncoding)
+	g.Header().Del(headerVary)
+	g.Header().Del(headerETag)
 }
 
 func (g *gzipWriter) Flush() {
@@ -111,7 +111,7 @@ func (g *gzipWriter) WriteHeader(code int) {
 	// because some handlers (like static file server) may call WriteHeader multiple times
 	// We'll check the status in Write() method when content is actually written
 
-	g.Header().Del("Content-Length")
+	g.Header().Del(headerContentLength)
 	g.ResponseWriter.WriteHeader(code)
 }
 

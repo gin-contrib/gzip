@@ -54,7 +54,7 @@ func TestHandleGzip(t *testing.T) {
 			router.ServeHTTP(w, req)
 
 			assert.Equal(t, http.StatusOK, w.Code)
-			assert.Equal(t, tt.expectedContentEncoding, w.Header().Get("Content-Encoding"))
+			assert.Equal(t, tt.expectedContentEncoding, w.Header().Get(headerContentEncoding))
 
 			if tt.expectedContentEncoding == gzipEncoding {
 				gr, err := gzip.NewReader(w.Body)
@@ -140,7 +140,7 @@ func TestHandle404NoCompression(t *testing.T) {
 			assert.Equal(t, http.StatusNotFound, w.Code)
 
 			// Check that Content-Encoding header is not set for 404 responses
-			contentEncoding := w.Header().Get("Content-Encoding")
+			contentEncoding := w.Header().Get(headerContentEncoding)
 			if tt.expectedGzip {
 				assert.Equal(t, gzipEncoding, contentEncoding)
 			} else {
@@ -149,7 +149,7 @@ func TestHandle404NoCompression(t *testing.T) {
 
 			// Verify that Vary header is also not set for uncompressed 404 responses
 			if !tt.expectedGzip {
-				vary := w.Header().Get("Vary")
+				vary := w.Header().Get(headerVary)
 				assert.Empty(t, vary, "404 responses should not have Vary header when not compressed")
 			}
 		})

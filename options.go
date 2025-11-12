@@ -218,7 +218,7 @@ func DefaultDecompressHandle(c *gin.Context) {
 		return
 	}
 
-	contentEncodingField := strings.Split(strings.ToLower(c.GetHeader("Content-Encoding")), ",")
+	contentEncodingField := strings.Split(strings.ToLower(c.GetHeader(headerContentEncoding)), ",")
 	if len(contentEncodingField) == 0 { // nothing to decompress
 		c.Next()
 
@@ -263,8 +263,8 @@ func DefaultDecompressHandle(c *gin.Context) {
 		c.Request.Body = r
 	}
 
-	c.Request.Header.Del("Content-Encoding")
-	c.Request.Header.Del("Content-Length")
+	c.Request.Header.Del(headerContentEncoding)
+	c.Request.Header.Del(headerContentLength)
 
 	c.Next()
 }
