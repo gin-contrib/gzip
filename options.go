@@ -242,7 +242,9 @@ func DefaultDecompressHandle(c *gin.Context) {
 			continue
 		}
 
-		if trimmedValue != "gzip" {
+		// A recipient SHOULD consider "x-gzip" to be equivalent to "gzip".
+		// https://www.rfc-editor.org/rfc/rfc7230#section-4.2.3
+		if trimmedValue != "gzip" && trimmedValue != "x-gzip" {
 			// According to RFC 7231, Section 3.1.2.2:
 			// https://www.rfc-editor.org/rfc/rfc7231#section-3.1.2.2
 			// An origin server MAY respond with a status code of 415 (Unsupported
