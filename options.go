@@ -47,6 +47,7 @@ type config struct {
 	decompressFn           func(c *gin.Context)
 	decompressOnly         bool
 	customShouldCompressFn func(c *gin.Context) bool
+	minLength              int
 }
 
 // WithExcludedExtensions returns an Option that sets the ExcludedExtensions field of the Options struct.
@@ -114,6 +115,32 @@ func WithDecompressOnly() Option {
 func WithCustomShouldCompressFn(fn func(c *gin.Context) bool) Option {
 	return optionFunc(func(o *config) {
 		o.customShouldCompressFn = fn
+	})
+}
+
+// WithMinLength returns an Option that sets the minLength field of the Options struct.
+// Parameters:
+//   - minLength: int - The minimum length of the response body (in bytes) to trigger gzip compression.
+//     If the response body is smaller than this length, it will not be compressed.
+//     This option is useful for avoiding the overhead of compression on small responses, especially since gzip
+//     compression actually increases the size of small responses. 2048 is a recommended value for most cases.
+//     The minLength value must be non-negative; negative values will cause undefined behavior.
+//
+// Note that specifying this option does not override other options. If a path has been excluded (eg through
+// WithExcludedPaths), it will continue to be excluded.
+//
+// Returns:
+//   - Option - An option that sets the MinLength field of the Options struct.
+//
+// Example:
+//
+//	router.Use(gzip.Gzip(gzip.DefaultCompression, gzip.WithMinLength(2048)))
+func WithMinLength(minLength int) Option {
+	if minLength < 0 {
+		panic("minLength must be non-negative")
+	}
+	return optionFunc(func(o *config) {
+		o.minLength = minLength
 	})
 }
 
