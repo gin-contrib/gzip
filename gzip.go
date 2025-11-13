@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -27,6 +28,7 @@ type gzipWriter struct {
 	gin.ResponseWriter
 	writer        *gzip.Writer
 	statusWritten bool
+	headerWrited  bool
 	status        int
 }
 
@@ -45,23 +47,32 @@ func (g *gzipWriter) Write(data []byte) (int, error) {
 	// For error responses (4xx, 5xx), don't compress
 	// Always check the current status, even if WriteHeader was called
 	if g.status >= 400 {
-		g.removeGzipHeaders()
 		return g.ResponseWriter.Write(data)
 	}
 
 	// Check if response is already gzip-compressed by looking at Content-Encoding header
 	// If upstream handler already set gzip encoding, pass through without double compression
 	if contentEncoding := g.Header().Get("Content-Encoding"); contentEncoding != "" && contentEncoding != gzipEncoding {
-		// Different encoding, remove our gzip headers and pass through
-		g.removeGzipHeaders()
 		return g.ResponseWriter.Write(data)
 	} else if contentEncoding == "gzip" {
 		// Already gzip encoded by upstream, check if this looks like gzip data
 		if len(data) >= 2 && data[0] == 0x1f && data[1] == 0x8b {
 			// This is already gzip data, remove our headers and pass through
-			g.removeGzipHeaders()
 			return g.ResponseWriter.Write(data)
 		}
+
+		// to avoid duplicating the already specified header
+		g.headerWrited = true
+	}
+
+	if !g.headerWrited {
+		g.Header().Add(headerContentEncoding, "gzip")
+		g.Header().Add(headerVary, headerAcceptEncoding)
+		originalEtag := g.Header().Get("ETag")
+		if originalEtag != "" && !strings.HasPrefix(originalEtag, "W/") {
+			g.Header().Set("ETag", "W/"+originalEtag)
+		}
+		g.headerWrited = true
 	}
 
 	return g.writer.Write(data)
@@ -88,13 +99,6 @@ func (g *gzipWriter) Written() bool {
 // WriteHeaderNow forces to write the http header
 func (g *gzipWriter) WriteHeaderNow() {
 	g.ResponseWriter.WriteHeaderNow()
-}
-
-// removeGzipHeaders removes compression-related headers for error responses
-func (g *gzipWriter) removeGzipHeaders() {
-	g.Header().Del("Content-Encoding")
-	g.Header().Del("Vary")
-	g.Header().Del("ETag")
 }
 
 func (g *gzipWriter) Flush() {
