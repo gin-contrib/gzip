@@ -77,23 +77,11 @@ func (g *gzipHandler) Handle(c *gin.Context) {
 	gz := g.gzPool.Get().(*gzip.Writer)
 	gz.Reset(c.Writer)
 
-	c.Header(headerContentEncoding, "gzip")
-	c.Writer.Header().Add(headerVary, headerAcceptEncoding)
-	// check ETag Header
-	originalEtag := c.GetHeader("ETag")
-	if originalEtag != "" && !strings.HasPrefix(originalEtag, "W/") {
-		c.Header("ETag", "W/"+originalEtag)
-	}
 	gw := &gzipWriter{ResponseWriter: c.Writer, writer: gz}
 	c.Writer = gw
 	defer func() {
-		// Only close gzip writer if it was actually used (not for error responses)
-		if gw.status >= 400 {
-			// Remove gzip headers for error responses when handler is complete
-			gw.removeGzipHeaders()
-			gz.Reset(io.Discard)
-		} else if c.Writer.Size() < 0 {
-			// do not write gzip footer when nothing is written to the response body
+		// Only close gzip writer if it was actually used (not for error responses or when nothing is written to the response body)
+		if gw.status >= 400 || c.Writer.Size() < 0 {
 			gz.Reset(io.Discard)
 		}
 		_ = gz.Close()

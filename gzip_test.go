@@ -61,6 +61,7 @@ func newServer() *gin.Engine {
 	})
 	router.GET("/ping", func(c *gin.Context) {
 		c.Writer.Header().Add("Vary", "Origin")
+		c.Writer.Header().Add("ETag", "\"33a64df551425fcc55e4d42a148795d9f25f89d4\"")
 	}, func(c *gin.Context) {
 		c.Header("Content-Length", strconv.Itoa(len(testResponse)))
 		c.String(200, testResponse)
@@ -81,7 +82,7 @@ func TestVaryHeader(t *testing.T) {
 
 	assert.Equal(t, 200, w.Code)
 	assert.Equal(t, "gzip", w.Header().Get(headerContentEncoding))
-	assert.Equal(t, []string{headerAcceptEncoding, "Origin"}, w.Header().Values(headerVary))
+	assert.ElementsMatch(t, []string{headerAcceptEncoding, "Origin"}, w.Header().Values(headerVary))
 	assert.NotEqual(t, "0", w.Header().Get("Content-Length"))
 	assert.NotEqual(t, 19, w.Body.Len())
 	assert.Equal(t, w.Header().Get("Content-Length"), fmt.Sprint(w.Body.Len()))
@@ -92,6 +93,18 @@ func TestVaryHeader(t *testing.T) {
 
 	body, _ := io.ReadAll(gr)
 	assert.Equal(t, testResponse, string(body))
+}
+
+func TestETagHeader(t *testing.T) {
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/ping", nil)
+	req.Header.Add(headerAcceptEncoding, "gzip")
+
+	w := httptest.NewRecorder()
+	r := newServer()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, 200, w.Code)
+	assert.Equal(t, "W/\"33a64df551425fcc55e4d42a148795d9f25f89d4\"", w.Header().Get("ETag"))
 }
 
 func TestGzip(t *testing.T) {
@@ -554,6 +567,9 @@ http_requests_total{method="get",status="400"} 3 1395066363000`
 		if len(body) >= 2 && body[0] == 0x1f && body[1] == 0x8b {
 			t.Error("Metrics response appears to be double-compressed - Prometheus scraping would fail")
 		}
+
+		// Verify the Content-Encoding header
+		assert.Equal(t, "gzip", w.Header().Get("Content-Encoding"))
 	} else {
 		// Response is not gzip compressed, check if content matches
 		assert.Equal(t, prometheusData, w.Body.String(), "Uncompressed metrics should match original content")
