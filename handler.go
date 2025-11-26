@@ -5,7 +5,6 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -88,9 +87,6 @@ func (g *gzipHandler) Handle(c *gin.Context) {
 			gz.Reset(io.Discard)
 		}
 		_ = gz.Close()
-		if c.Writer.Size() > -1 {
-			c.Header("Content-Length", strconv.Itoa(c.Writer.Size()))
-		}
 		g.gzPool.Put(gz)
 	}()
 	c.Next()

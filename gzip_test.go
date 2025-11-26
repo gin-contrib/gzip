@@ -82,9 +82,7 @@ func TestVaryHeader(t *testing.T) {
 	assert.Equal(t, 200, w.Code)
 	assert.Equal(t, "gzip", w.Header().Get(headerContentEncoding))
 	assert.Equal(t, []string{"Origin", headerAcceptEncoding}, w.Header().Values(headerVary))
-	assert.NotEqual(t, "0", w.Header().Get("Content-Length"))
 	assert.NotEqual(t, 19, w.Body.Len())
-	assert.Equal(t, w.Header().Get("Content-Length"), fmt.Sprint(w.Body.Len()))
 
 	gr, err := gzip.NewReader(w.Body)
 	assert.NoError(t, err)
@@ -105,9 +103,7 @@ func TestGzip(t *testing.T) {
 	assert.Equal(t, w.Code, 200)
 	assert.Equal(t, w.Header().Get(headerContentEncoding), "gzip")
 	assert.Equal(t, w.Header().Get(headerVary), headerAcceptEncoding)
-	assert.NotEqual(t, w.Header().Get("Content-Length"), "0")
 	assert.NotEqual(t, w.Body.Len(), 19)
-	assert.Equal(t, fmt.Sprint(w.Body.Len()), w.Header().Get("Content-Length"))
 
 	gr, err := gzip.NewReader(w.Body)
 	assert.NoError(t, err)
@@ -194,9 +190,7 @@ func TestGzipWithReverseProxy(t *testing.T) {
 	assert.Equal(t, w.Code, 200)
 	assert.Equal(t, w.Header().Get(headerContentEncoding), "gzip")
 	assert.Equal(t, w.Header().Get(headerVary), headerAcceptEncoding)
-	assert.NotEqual(t, w.Header().Get("Content-Length"), "0")
 	assert.NotEqual(t, w.Body.Len(), 19)
-	assert.Equal(t, fmt.Sprint(w.Body.Len()), w.Header().Get("Content-Length"))
 
 	gr, err := gzip.NewReader(w.Body)
 	assert.NoError(t, err)

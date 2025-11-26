@@ -115,12 +115,6 @@ func (g *gzipWriter) Flush() {
 func (g *gzipWriter) WriteHeader(code int) {
 	g.status = code
 	g.statusWritten = true
-
-	// Don't remove gzip headers immediately for error responses in WriteHeader
-	// because some handlers (like static file server) may call WriteHeader multiple times
-	// We'll check the status in Write() method when content is actually written
-
-	g.Header().Del("Content-Length")
 	g.ResponseWriter.WriteHeader(code)
 }
 
