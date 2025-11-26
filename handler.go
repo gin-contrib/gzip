@@ -79,14 +79,12 @@ func (g *gzipHandler) Handle(c *gin.Context) {
 	gw := &gzipWriter{ResponseWriter: c.Writer, writer: gz}
 	c.Writer = gw
 	defer func() {
-		// Only close gzip writer if it was actually used (not for error responses)
-		if gw.status >= 400 {
-			gz.Reset(io.Discard)
-		} else if c.Writer.Size() < 0 {
-			// do not write gzip footer when nothing is written to the response body
-			gz.Reset(io.Discard)
+		if gw.headersSet {
+			// We compressed data, close properly to write gzip footer
+			_ = gz.Close()
 		}
-		_ = gz.Close()
+
+		gz.Reset(io.Discard)
 		g.gzPool.Put(gz)
 	}()
 	c.Next()

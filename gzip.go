@@ -30,6 +30,7 @@ type gzipWriter struct {
 	statusWritten bool
 	status        int
 	headersSet    bool // Track if we've set compression headers yet
+	passThrough   bool // Track if we're passing through without compression
 }
 
 func (g *gzipWriter) WriteString(s string) (int, error) {
@@ -48,32 +49,38 @@ func (g *gzipWriter) Write(data []byte) (int, error) {
 		return g.ResponseWriter.Write(data)
 	}
 
-	// Check if response is already gzip-compressed by looking at Content-Encoding header
-	// If upstream handler already set gzip encoding, pass through without double compression
-	if contentEncoding := g.Header().Get("Content-Encoding"); contentEncoding != "" && contentEncoding != gzipEncoding {
-		// Different encoding, pass through
+	if g.passThrough {
+		// Continue pass through decision on subsequent writes
 		return g.ResponseWriter.Write(data)
-	} else if contentEncoding == "gzip" {
-		// Already gzip encoded by upstream, check if this looks like gzip data
-		if len(data) >= 2 && data[0] == 0x1f && data[1] == 0x8b {
-			// This is already gzip data, pass through
-			return g.ResponseWriter.Write(data)
-		}
 	}
 
-	// At this point, we should compress the response
-	// Set headers on first write if not already set
 	if !g.headersSet {
+		// Check if response is already gzip-compressed by looking at Content-Encoding header
+		// If upstream handler already set gzip encoding, pass through without double compression
+		if contentEncoding := g.Header().Get("Content-Encoding"); contentEncoding != "" && contentEncoding != gzipEncoding {
+			// Different encoding, mark for pass through
+			g.passThrough = true
+			return g.ResponseWriter.Write(data)
+		} else if contentEncoding == gzipEncoding {
+			// Already gzip encoded by upstream, check if this looks like gzip data
+			if len(data) >= 2 && data[0] == 0x1f && data[1] == 0x8b {
+				// This is already gzip data, mark for pass through
+				g.passThrough = true
+				return g.ResponseWriter.Write(data)
+			}
+		}
+
+		// Set compression headers as the we decided to compress
 		g.setCompressionHeaders()
 		g.headersSet = true
 	}
 
-	g.Header().Del("Content-Length")
 	return g.writer.Write(data)
 }
 
 // setCompressionHeaders sets the headers needed for gzip compression
 func (g *gzipWriter) setCompressionHeaders() {
+	g.Header().Del("Content-Length")
 	g.Header().Set("Content-Encoding", "gzip")
 	g.Header().Add("Vary", "Accept-Encoding")
 
