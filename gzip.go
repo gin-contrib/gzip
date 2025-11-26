@@ -45,7 +45,6 @@ func (g *gzipWriter) Write(data []byte) (int, error) {
 	// For error responses (4xx, 5xx), don't compress
 	// Always check the current status, even if WriteHeader was called
 	if g.status >= 400 {
-		g.removeGzipHeaders()
 		return g.ResponseWriter.Write(data)
 	}
 
@@ -108,13 +107,6 @@ func (g *gzipWriter) Written() bool {
 // WriteHeaderNow forces to write the http header
 func (g *gzipWriter) WriteHeaderNow() {
 	g.ResponseWriter.WriteHeaderNow()
-}
-
-// removeGzipHeaders removes compression-related headers for error responses
-func (g *gzipWriter) removeGzipHeaders() {
-	g.Header().Del("Content-Encoding")
-	g.Header().Del("Vary")
-	g.Header().Del("ETag")
 }
 
 func (g *gzipWriter) Flush() {

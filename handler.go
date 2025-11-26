@@ -82,8 +82,6 @@ func (g *gzipHandler) Handle(c *gin.Context) {
 	defer func() {
 		// Only close gzip writer if it was actually used (not for error responses)
 		if gw.status >= 400 {
-			// Remove gzip headers for error responses when handler is complete
-			gw.removeGzipHeaders()
 			gz.Reset(io.Discard)
 		} else if c.Writer.Size() < 0 {
 			// do not write gzip footer when nothing is written to the response body
