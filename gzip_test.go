@@ -664,3 +664,110 @@ func TestPreserveAlreadyGzipped(t *testing.T) {
 		t.Fatalf("response appears double-compressed")
 	}
 }
+
+// Test that chunked already-gzipped responses are handled correctly
+// Regression test: if upstream sends gzipped data in multiple writes,
+// we should pass through ALL chunks, not just the first one
+func TestPreserveAlreadyGzippedChunked(t *testing.T) {
+	// prepare gzip payload
+	buf := &bytes.Buffer{}
+	gw := gzip.NewWriter(buf)
+	_, err := gw.Write([]byte("chunk1-"))
+	require.NoError(t, err)
+	_, err = gw.Write([]byte("chunk2-"))
+	require.NoError(t, err)
+	_, err = gw.Write([]byte("chunk3"))
+	require.NoError(t, err)
+	require.NoError(t, gw.Close())
+
+	gzippedData := buf.Bytes()
+
+	// Split the gzipped data into chunks
+	chunk1 := gzippedData[:len(gzippedData)/3]
+	chunk2 := gzippedData[len(gzippedData)/3 : 2*len(gzippedData)/3]
+	chunk3 := gzippedData[2*len(gzippedData)/3:]
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Encoding", "gzip")
+		w.WriteHeader(200)
+		// Write in chunks to simulate streaming
+		_, _ = w.Write(chunk1)
+		_, _ = w.Write(chunk2)
+		_, _ = w.Write(chunk3)
+	}))
+	defer upstream.Close()
+
+	target, err := url.Parse(upstream.URL)
+	require.NoError(t, err)
+	rp := httputil.NewSingleHostReverseProxy(target)
+
+	router := gin.New()
+	router.Use(Gzip(DefaultCompression))
+	router.Any("/proxy", func(c *gin.Context) {
+		rp.ServeHTTP(c.Writer, c.Request)
+	})
+
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/proxy", nil)
+	req.Header.Add(headerAcceptEncoding, "gzip")
+
+	w := newCloseNotifyingRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, 200, w.Code)
+	assert.Equal(t, "gzip", w.Header().Get("Content-Encoding"))
+
+	// Body should be a valid single gzip stream
+	respBytes := w.Body.Bytes()
+	require.GreaterOrEqual(t, len(respBytes), 2, "response should have data")
+	assert.Equal(t, byte(0x1f), respBytes[0], "should start with gzip magic byte 1")
+	assert.Equal(t, byte(0x8b), respBytes[1], "should start with gzip magic byte 2")
+
+	gr, err := gzip.NewReader(bytes.NewReader(respBytes))
+	require.NoError(t, err, "should be valid gzip")
+	defer gr.Close()
+
+	body, err := io.ReadAll(gr)
+	require.NoError(t, err, "should decompress without error")
+	assert.Equal(t, "chunk1-chunk2-chunk3", string(body))
+
+	// Ensure not double-compressed
+	if len(body) >= 2 && body[0] == 0x1f && body[1] == 0x8b {
+		t.Fatalf("response appears double-compressed")
+	}
+}
+
+// Test that chunked responses with different encoding are passed through
+func TestPreserveChunkedDifferentEncoding(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Encoding", "br")
+		w.WriteHeader(200)
+		// Simulate chunked response with brotli encoding (fake data)
+		_, _ = w.Write([]byte("brotli-chunk1-"))
+		_, _ = w.Write([]byte("brotli-chunk2-"))
+		_, _ = w.Write([]byte("brotli-chunk3"))
+	}))
+	defer upstream.Close()
+
+	target, err := url.Parse(upstream.URL)
+	require.NoError(t, err)
+	rp := httputil.NewSingleHostReverseProxy(target)
+
+	router := gin.New()
+	router.Use(Gzip(DefaultCompression))
+	router.Any("/proxy", func(c *gin.Context) {
+		rp.ServeHTTP(c.Writer, c.Request)
+	})
+
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/proxy", nil)
+	req.Header.Add(headerAcceptEncoding, "gzip")
+
+	w := newCloseNotifyingRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, 200, w.Code)
+	assert.Equal(t, "br", w.Header().Get("Content-Encoding"))
+
+	// All chunks should be passed through unmodified
+	assert.Equal(t, "brotli-chunk1-brotli-chunk2-brotli-chunk3", w.Body.String())
+}
+
