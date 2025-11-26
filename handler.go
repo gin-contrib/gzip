@@ -77,13 +77,6 @@ func (g *gzipHandler) Handle(c *gin.Context) {
 	gz := g.gzPool.Get().(*gzip.Writer)
 	gz.Reset(c.Writer)
 
-	c.Header(headerContentEncoding, "gzip")
-	c.Writer.Header().Add(headerVary, headerAcceptEncoding)
-	// check ETag Header
-	originalEtag := c.GetHeader("ETag")
-	if originalEtag != "" && !strings.HasPrefix(originalEtag, "W/") {
-		c.Header("ETag", "W/"+originalEtag)
-	}
 	gw := &gzipWriter{ResponseWriter: c.Writer, writer: gz}
 	c.Writer = gw
 	defer func() {

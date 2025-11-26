@@ -81,7 +81,7 @@ func TestVaryHeader(t *testing.T) {
 
 	assert.Equal(t, 200, w.Code)
 	assert.Equal(t, "gzip", w.Header().Get(headerContentEncoding))
-	assert.Equal(t, []string{headerAcceptEncoding, "Origin"}, w.Header().Values(headerVary))
+	assert.Equal(t, []string{"Origin", headerAcceptEncoding}, w.Header().Values(headerVary))
 	assert.NotEqual(t, "0", w.Header().Get("Content-Length"))
 	assert.NotEqual(t, 19, w.Body.Len())
 	assert.Equal(t, w.Header().Get("Content-Length"), fmt.Sprint(w.Body.Len()))
@@ -557,5 +557,116 @@ http_requests_total{method="get",status="400"} 3 1395066363000`
 	} else {
 		// Response is not gzip compressed, check if content matches
 		assert.Equal(t, prometheusData, w.Body.String(), "Uncompressed metrics should match original content")
+	}
+}
+
+func TestPreserveUpstreamHeaders(t *testing.T) {
+	// upstream server that sets Content-Encoding to something other than gzip
+	// and also sets Vary and ETag headers which must be preserved
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Encoding", "br")
+		w.Header().Set("Vary", "Origin")
+		w.Header().Set("ETag", "upstream-etag")
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte("upstream"))
+	}))
+	defer upstream.Close()
+
+	target, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatalf("parse upstream url: %v", err)
+	}
+	rp := httputil.NewSingleHostReverseProxy(target)
+
+	router := gin.New()
+	router.Use(Gzip(DefaultCompression))
+	router.Any("/p", func(c *gin.Context) {
+		rp.ServeHTTP(c.Writer, c.Request)
+	})
+
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/p", nil)
+	req.Header.Add(headerAcceptEncoding, "gzip")
+
+	w := newCloseNotifyingRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, 200, w.Code)
+
+	// The middleware should not remove headers set by the upstream handler.
+	// In particular, Vary and ETag must remain intact and Content-Encoding should
+	// reflect what upstream provided ("br" in this test).
+	assert.Equal(t, "br", w.Header().Get("Content-Encoding"))
+	assert.Equal(t, "Origin", w.Header().Get("Vary"))
+	assert.Equal(t, "upstream-etag", w.Header().Get("ETag"))
+}
+
+// Regression test: upstream already returns gzip encoded body and sets headers.
+// The middleware must not double-compress nor strip upstream headers.
+func TestPreserveAlreadyGzipped(t *testing.T) {
+	// prepare gzip payload
+	buf := &bytes.Buffer{}
+	gw := gzip.NewWriter(buf)
+	_, err := gw.Write([]byte("upstream-gzip"))
+	if err != nil {
+		t.Fatalf("failed to write gzip payload: %v", err)
+	}
+	if err := gw.Close(); err != nil {
+		t.Fatalf("failed to close gzip writer: %v", err)
+	}
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Set("Vary", "Origin")
+		w.Header().Set("ETag", "upstream-etag")
+		w.WriteHeader(200)
+		_, _ = w.Write(buf.Bytes())
+	}))
+	defer upstream.Close()
+
+	target, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatalf("parse upstream url: %v", err)
+	}
+	rp := httputil.NewSingleHostReverseProxy(target)
+
+	router := gin.New()
+	router.Use(Gzip(DefaultCompression))
+	router.Any("/pgz", func(c *gin.Context) {
+		rp.ServeHTTP(c.Writer, c.Request)
+	})
+
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/pgz", nil)
+	req.Header.Add(headerAcceptEncoding, "gzip")
+
+	w := newCloseNotifyingRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, 200, w.Code)
+
+	// headers from upstream must be preserved
+	assert.Equal(t, "gzip", w.Header().Get("Content-Encoding"))
+	assert.Equal(t, "Origin", w.Header().Get("Vary"))
+	assert.Equal(t, "upstream-etag", w.Header().Get("ETag"))
+
+	// body should be a single gzip stream that decompresses once to original content
+	respBytes := w.Body.Bytes()
+	if len(respBytes) < 2 || respBytes[0] != 0x1f || respBytes[1] != 0x8b {
+		t.Fatalf("response is not gzip magic bytes")
+	}
+
+	gr, err := gzip.NewReader(bytes.NewReader(respBytes))
+	if err != nil {
+		t.Fatalf("failed to create gzip reader: %v", err)
+	}
+	defer gr.Close()
+	body, err := io.ReadAll(gr)
+	if err != nil {
+		t.Fatalf("failed to read gzip body: %v", err)
+	}
+	assert.Equal(t, "upstream-gzip", string(body))
+
+	// ensure not double-compressed: decompressed body should not start with gzip magic
+	if len(body) >= 2 && body[0] == 0x1f && body[1] == 0x8b {
+		t.Fatalf("response appears double-compressed")
 	}
 }

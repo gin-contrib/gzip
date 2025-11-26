@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -25,9 +26,10 @@ func Gzip(level int, options ...Option) gin.HandlerFunc {
 
 type gzipWriter struct {
 	gin.ResponseWriter
-	writer        *gzip.Writer
-	statusWritten bool
-	status        int
+	writer         *gzip.Writer
+	statusWritten  bool
+	status         int
+	headersSet     bool // Track if we've set compression headers yet
 }
 
 func (g *gzipWriter) WriteString(s string) (int, error) {
@@ -35,8 +37,6 @@ func (g *gzipWriter) WriteString(s string) (int, error) {
 }
 
 func (g *gzipWriter) Write(data []byte) (int, error) {
-	g.Header().Del("Content-Length")
-
 	// Check status from ResponseWriter if not set via WriteHeader
 	if !g.statusWritten {
 		g.status = g.ResponseWriter.Status()
@@ -49,22 +49,42 @@ func (g *gzipWriter) Write(data []byte) (int, error) {
 		return g.ResponseWriter.Write(data)
 	}
 
-	// Check if response is already gzip-compressed by looking at Content-Encoding header
-	// If upstream handler already set gzip encoding, pass through without double compression
-	if contentEncoding := g.Header().Get("Content-Encoding"); contentEncoding != "" && contentEncoding != gzipEncoding {
-		// Different encoding, remove our gzip headers and pass through
-		g.removeGzipHeaders()
-		return g.ResponseWriter.Write(data)
-	} else if contentEncoding == "gzip" {
-		// Already gzip encoded by upstream, check if this looks like gzip data
-		if len(data) >= 2 && data[0] == 0x1f && data[1] == 0x8b {
-			// This is already gzip data, remove our headers and pass through
-			g.removeGzipHeaders()
+	// Check if response is already compressed or has encoding set by upstream handler
+	// If Content-Encoding was set by an upstream handler, respect that and don't compress
+	if contentEncoding := g.Header().Get("Content-Encoding"); contentEncoding != "" {
+		if contentEncoding == gzipEncoding {
+			// Already gzip encoded by upstream, check if this looks like gzip data
+			if len(data) >= 2 && data[0] == 0x1f && data[1] == 0x8b {
+				// This is already gzip data from upstream - pass through as-is
+				return g.ResponseWriter.Write(data)
+			}
+			// Content-Encoding is gzip but data isn't - fall through to compress
+		} else {
+			// Different encoding set by upstream (br, deflate, etc.) - pass through as-is
 			return g.ResponseWriter.Write(data)
 		}
 	}
 
+	// At this point, we should compress the response
+	// Set headers on first write if not already set
+	if !g.headersSet {
+		g.setCompressionHeaders()
+		g.headersSet = true
+	}
+
+	g.Header().Del("Content-Length")
 	return g.writer.Write(data)
+}
+
+// setCompressionHeaders sets the headers needed for gzip compression
+func (g *gzipWriter) setCompressionHeaders() {
+	g.Header().Set("Content-Encoding", "gzip")
+	g.Header().Add("Vary", "Accept-Encoding")
+
+	// Modify ETag to weak if present
+	if etag := g.Header().Get("ETag"); etag != "" && !strings.HasPrefix(etag, "W/") {
+		g.Header().Set("ETag", "W/"+etag)
+	}
 }
 
 // Status returns the HTTP response status code
