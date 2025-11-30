@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -28,6 +29,8 @@ type gzipWriter struct {
 	writer        *gzip.Writer
 	statusWritten bool
 	status        int
+	headersSet    bool // Track if we've set compression headers yet
+	passThrough   bool // Track if we're passing through without compression
 }
 
 func (g *gzipWriter) WriteString(s string) (int, error) {
@@ -35,8 +38,6 @@ func (g *gzipWriter) WriteString(s string) (int, error) {
 }
 
 func (g *gzipWriter) Write(data []byte) (int, error) {
-	g.Header().Del("Content-Length")
-
 	// Check status from ResponseWriter if not set via WriteHeader
 	if !g.statusWritten {
 		g.status = g.ResponseWriter.Status()
@@ -45,26 +46,48 @@ func (g *gzipWriter) Write(data []byte) (int, error) {
 	// For error responses (4xx, 5xx), don't compress
 	// Always check the current status, even if WriteHeader was called
 	if g.status >= 400 {
-		g.removeGzipHeaders()
 		return g.ResponseWriter.Write(data)
 	}
 
-	// Check if response is already gzip-compressed by looking at Content-Encoding header
-	// If upstream handler already set gzip encoding, pass through without double compression
-	if contentEncoding := g.Header().Get("Content-Encoding"); contentEncoding != "" && contentEncoding != gzipEncoding {
-		// Different encoding, remove our gzip headers and pass through
-		g.removeGzipHeaders()
+	if g.passThrough {
+		// Continue pass through decision on subsequent writes
 		return g.ResponseWriter.Write(data)
-	} else if contentEncoding == "gzip" {
-		// Already gzip encoded by upstream, check if this looks like gzip data
-		if len(data) >= 2 && data[0] == 0x1f && data[1] == 0x8b {
-			// This is already gzip data, remove our headers and pass through
-			g.removeGzipHeaders()
+	}
+
+	if !g.headersSet {
+		// Check if response is already gzip-compressed by looking at Content-Encoding header
+		// If upstream handler already set gzip encoding, pass through without double compression
+		if contentEncoding := g.Header().Get("Content-Encoding"); contentEncoding != "" && contentEncoding != gzipEncoding {
+			// Different encoding, mark for pass through
+			g.passThrough = true
 			return g.ResponseWriter.Write(data)
+		} else if contentEncoding == gzipEncoding {
+			// Already gzip encoded by upstream, check if this looks like gzip data
+			if len(data) >= 2 && data[0] == 0x1f && data[1] == 0x8b {
+				// This is already gzip data, mark for pass through
+				g.passThrough = true
+				return g.ResponseWriter.Write(data)
+			}
 		}
+
+		// Set compression headers as the we decided to compress
+		g.setCompressionHeaders()
+		g.headersSet = true
 	}
 
 	return g.writer.Write(data)
+}
+
+// setCompressionHeaders sets the headers needed for gzip compression
+func (g *gzipWriter) setCompressionHeaders() {
+	g.Header().Del("Content-Length")
+	g.Header().Set("Content-Encoding", "gzip")
+	g.Header().Add("Vary", "Accept-Encoding")
+
+	// Modify ETag to weak if present
+	if etag := g.Header().Get("ETag"); etag != "" && !strings.HasPrefix(etag, "W/") {
+		g.Header().Set("ETag", "W/"+etag)
+	}
 }
 
 // Status returns the HTTP response status code
@@ -90,13 +113,6 @@ func (g *gzipWriter) WriteHeaderNow() {
 	g.ResponseWriter.WriteHeaderNow()
 }
 
-// removeGzipHeaders removes compression-related headers for error responses
-func (g *gzipWriter) removeGzipHeaders() {
-	g.Header().Del("Content-Encoding")
-	g.Header().Del("Vary")
-	g.Header().Del("ETag")
-}
-
 func (g *gzipWriter) Flush() {
 	_ = g.writer.Flush()
 	g.ResponseWriter.Flush()
@@ -106,12 +122,6 @@ func (g *gzipWriter) Flush() {
 func (g *gzipWriter) WriteHeader(code int) {
 	g.status = code
 	g.statusWritten = true
-
-	// Don't remove gzip headers immediately for error responses in WriteHeader
-	// because some handlers (like static file server) may call WriteHeader multiple times
-	// We'll check the status in Write() method when content is actually written
-
-	g.Header().Del("Content-Length")
 	g.ResponseWriter.WriteHeader(code)
 }
 

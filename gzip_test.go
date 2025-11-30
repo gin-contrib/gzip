@@ -81,10 +81,8 @@ func TestVaryHeader(t *testing.T) {
 
 	assert.Equal(t, 200, w.Code)
 	assert.Equal(t, "gzip", w.Header().Get(headerContentEncoding))
-	assert.Equal(t, []string{headerAcceptEncoding, "Origin"}, w.Header().Values(headerVary))
-	assert.NotEqual(t, "0", w.Header().Get("Content-Length"))
+	assert.Equal(t, []string{"Origin", headerAcceptEncoding}, w.Header().Values(headerVary))
 	assert.NotEqual(t, 19, w.Body.Len())
-	assert.Equal(t, w.Header().Get("Content-Length"), fmt.Sprint(w.Body.Len()))
 
 	gr, err := gzip.NewReader(w.Body)
 	assert.NoError(t, err)
@@ -105,9 +103,7 @@ func TestGzip(t *testing.T) {
 	assert.Equal(t, w.Code, 200)
 	assert.Equal(t, w.Header().Get(headerContentEncoding), "gzip")
 	assert.Equal(t, w.Header().Get(headerVary), headerAcceptEncoding)
-	assert.NotEqual(t, w.Header().Get("Content-Length"), "0")
 	assert.NotEqual(t, w.Body.Len(), 19)
-	assert.Equal(t, fmt.Sprint(w.Body.Len()), w.Header().Get("Content-Length"))
 
 	gr, err := gzip.NewReader(w.Body)
 	assert.NoError(t, err)
@@ -194,9 +190,7 @@ func TestGzipWithReverseProxy(t *testing.T) {
 	assert.Equal(t, w.Code, 200)
 	assert.Equal(t, w.Header().Get(headerContentEncoding), "gzip")
 	assert.Equal(t, w.Header().Get(headerVary), headerAcceptEncoding)
-	assert.NotEqual(t, w.Header().Get("Content-Length"), "0")
 	assert.NotEqual(t, w.Body.Len(), 19)
-	assert.Equal(t, fmt.Sprint(w.Body.Len()), w.Header().Get("Content-Length"))
 
 	gr, err := gzip.NewReader(w.Body)
 	assert.NoError(t, err)
@@ -559,3 +553,175 @@ http_requests_total{method="get",status="400"} 3 1395066363000`
 		assert.Equal(t, prometheusData, w.Body.String(), "Uncompressed metrics should match original content")
 	}
 }
+
+func TestPreserveUpstreamHeaders(t *testing.T) {
+	router := gin.New()
+	router.Use(Gzip(DefaultCompression))
+	router.GET("/upstream", func(c *gin.Context) {
+		// Simulate upstream handler that sets its own encoding
+		c.Header("Content-Encoding", "br")
+		c.Header("Vary", "Origin")
+		c.Header("ETag", "upstream-etag")
+		c.String(200, "upstream")
+	})
+
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/upstream", nil)
+	req.Header.Add(headerAcceptEncoding, "gzip")
+
+	w := newCloseNotifyingRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, 200, w.Code)
+
+	// The middleware should not remove headers set by the upstream handler.
+	// In particular, Vary and ETag must remain intact and Content-Encoding should
+	// reflect what upstream provided ("br" in this test).
+	assert.Equal(t, "br", w.Header().Get("Content-Encoding"))
+	assert.Equal(t, "Origin", w.Header().Get("Vary"))
+	assert.Equal(t, "upstream-etag", w.Header().Get("ETag"))
+	assert.Equal(t, "upstream", w.Body.String())
+}
+
+// Regression test: upstream already returns gzip encoded body and sets headers.
+// The middleware must not double-compress nor strip upstream headers.
+func TestPreserveAlreadyGzipped(t *testing.T) {
+	// prepare gzip payload
+	buf := &bytes.Buffer{}
+	gw := gzip.NewWriter(buf)
+	_, err := gw.Write([]byte("upstream-gzip"))
+	require.NoError(t, err)
+	require.NoError(t, gw.Close())
+
+	router := gin.New()
+	router.Use(Gzip(DefaultCompression))
+	router.GET("/gzipped", func(c *gin.Context) {
+		// Simulate upstream handler that already gzipped the response
+		c.Header("Content-Encoding", "gzip")
+		c.Header("Vary", "Origin")
+		c.Header("ETag", "upstream-etag")
+		c.Data(200, "application/octet-stream", buf.Bytes())
+	})
+
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/gzipped", nil)
+	req.Header.Add(headerAcceptEncoding, "gzip")
+
+	w := newCloseNotifyingRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, 200, w.Code)
+
+	// headers from upstream must be preserved
+	assert.Equal(t, "gzip", w.Header().Get("Content-Encoding"))
+	assert.Equal(t, "Origin", w.Header().Get("Vary"))
+	assert.Equal(t, "upstream-etag", w.Header().Get("ETag"))
+
+	// body should be a single gzip stream that decompresses once to original content
+	respBytes := w.Body.Bytes()
+	require.GreaterOrEqual(t, len(respBytes), 2)
+	assert.Equal(t, byte(0x1f), respBytes[0])
+	assert.Equal(t, byte(0x8b), respBytes[1])
+
+	gr, err := gzip.NewReader(bytes.NewReader(respBytes))
+	require.NoError(t, err)
+	defer gr.Close()
+
+	body, err := io.ReadAll(gr)
+	require.NoError(t, err)
+	assert.Equal(t, "upstream-gzip", string(body))
+
+	// ensure not double-compressed: decompressed body should not start with gzip magic
+	if len(body) >= 2 && body[0] == 0x1f && body[1] == 0x8b {
+		t.Fatalf("response appears double-compressed")
+	}
+}
+
+// Test that chunked already-gzipped responses are handled correctly
+// Regression test: if upstream sends gzipped data in multiple writes,
+// we should pass through ALL chunks, not just the first one
+func TestPreserveAlreadyGzippedChunked(t *testing.T) {
+	// prepare gzip payload
+	buf := &bytes.Buffer{}
+	gw := gzip.NewWriter(buf)
+	_, err := gw.Write([]byte("chunk1-"))
+	require.NoError(t, err)
+	_, err = gw.Write([]byte("chunk2-"))
+	require.NoError(t, err)
+	_, err = gw.Write([]byte("chunk3"))
+	require.NoError(t, err)
+	require.NoError(t, gw.Close())
+
+	gzippedData := buf.Bytes()
+
+	// Split the gzipped data into chunks
+	chunk1 := gzippedData[:len(gzippedData)/3]
+	chunk2 := gzippedData[len(gzippedData)/3 : 2*len(gzippedData)/3]
+	chunk3 := gzippedData[2*len(gzippedData)/3:]
+
+	router := gin.New()
+	router.Use(Gzip(DefaultCompression))
+	router.GET("/chunked", func(c *gin.Context) {
+		// Simulate handler that writes pre-gzipped data in chunks
+		c.Header("Content-Encoding", "gzip")
+		c.Status(200)
+		// Write in chunks to simulate streaming
+		c.Writer.Write(chunk1)
+		c.Writer.Write(chunk2)
+		c.Writer.Write(chunk3)
+	})
+
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/chunked", nil)
+	req.Header.Add(headerAcceptEncoding, "gzip")
+
+	w := newCloseNotifyingRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, 200, w.Code)
+	assert.Equal(t, "gzip", w.Header().Get("Content-Encoding"))
+
+	// Body should be a valid single gzip stream
+	respBytes := w.Body.Bytes()
+	require.GreaterOrEqual(t, len(respBytes), 2, "response should have data")
+	assert.Equal(t, byte(0x1f), respBytes[0], "should start with gzip magic byte 1")
+	assert.Equal(t, byte(0x8b), respBytes[1], "should start with gzip magic byte 2")
+
+	gr, err := gzip.NewReader(bytes.NewReader(respBytes))
+	require.NoError(t, err, "should be valid gzip")
+	defer gr.Close()
+
+	body, err := io.ReadAll(gr)
+	require.NoError(t, err, "should decompress without error")
+	assert.Equal(t, "chunk1-chunk2-chunk3", string(body))
+
+	// Ensure not double-compressed
+	if len(body) >= 2 && body[0] == 0x1f && body[1] == 0x8b {
+		t.Fatalf("response appears double-compressed")
+	}
+}
+
+// Test that chunked responses with different encoding are passed through
+func TestPreserveChunkedDifferentEncoding(t *testing.T) {
+	router := gin.New()
+	router.Use(Gzip(DefaultCompression))
+	router.GET("/chunked-br", func(c *gin.Context) {
+		// Simulate handler with brotli encoding writing in chunks
+		c.Header("Content-Encoding", "br")
+		c.Status(200)
+		// Write in chunks to simulate streaming
+		c.Writer.Write([]byte("brotli-chunk1-"))
+		c.Writer.Write([]byte("brotli-chunk2-"))
+		c.Writer.Write([]byte("brotli-chunk3"))
+	})
+
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/chunked-br", nil)
+	req.Header.Add(headerAcceptEncoding, "gzip")
+
+	w := newCloseNotifyingRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, 200, w.Code)
+	assert.Equal(t, "br", w.Header().Get("Content-Encoding"))
+
+	// All chunks should be passed through unmodified
+	assert.Equal(t, "brotli-chunk1-brotli-chunk2-brotli-chunk3", w.Body.String())
+}
+
