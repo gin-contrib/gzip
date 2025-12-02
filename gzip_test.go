@@ -13,6 +13,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -134,6 +135,17 @@ func TestGzipPNG(t *testing.T) {
 	assert.Equal(t, w.Header().Get(headerContentEncoding), "")
 	assert.Equal(t, w.Header().Get(headerVary), "")
 	assert.Equal(t, w.Body.String(), "this is a PNG!")
+}
+
+func TestWriteString(t *testing.T) {
+	testC, _ := gin.CreateTestContext(httptest.NewRecorder())
+	gz := gzipWriter{
+		ResponseWriter: testC.Writer,
+		writer:         gzip.NewWriter(testC.Writer),
+	}
+	n, err := gz.WriteString("test")
+	assert.NoError(t, err)
+	assert.Equal(t, 4, n)
 }
 
 func TestExcludedPathsAndExtensions(t *testing.T) {
@@ -375,6 +387,150 @@ func TestCustomShouldCompressFn(t *testing.T) {
 	assert.Equal(t, "", w.Header().Get(headerContentEncoding))
 	assert.Equal(t, "19", w.Header().Get("Content-Length"))
 	assert.Equal(t, testResponse, w.Body.String())
+}
+
+func TestMinLengthInvalidValue(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("Invalid minLength should cause panic")
+		}
+	}()
+
+	router := gin.New()
+	router.Use(Gzip(DefaultCompression, WithMinLength(-1)))
+}
+
+func TestMinLengthShortResponse(t *testing.T) {
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/", nil)
+	req.Header.Add(headerAcceptEncoding, "gzip")
+
+	router := gin.New()
+	router.Use(Gzip(DefaultCompression, WithMinLength(2048)))
+	router.GET("/", func(c *gin.Context) {
+		c.String(200, testResponse)
+	})
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, 200, w.Code)
+	assert.Equal(t, "", w.Header().Get(headerContentEncoding))
+	assert.Equal(t, "19", w.Header().Get("Content-Length"))
+	assert.Equal(t, testResponse, w.Body.String())
+}
+
+func TestMinLengthLongResponse(t *testing.T) {
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/", nil)
+	req.Header.Add(headerAcceptEncoding, "gzip")
+
+	router := gin.New()
+	router.Use(Gzip(DefaultCompression, WithMinLength(2048)))
+	router.GET("/", func(c *gin.Context) {
+		c.String(200, strings.Repeat("a", 2048))
+	})
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, 200, w.Code)
+	assert.Equal(t, "gzip", w.Header().Get(headerContentEncoding))
+	assert.NotEqual(t, "2048", w.Header().Get("Content-Length"))
+	assert.Less(t, w.Body.Len(), 2048)
+}
+
+func TestMinLengthMultiWriteResponse(t *testing.T) {
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/", nil)
+	req.Header.Add(headerAcceptEncoding, "gzip")
+
+	router := gin.New()
+	router.Use(Gzip(DefaultCompression, WithMinLength(2048)))
+	router.GET("/", func(c *gin.Context) {
+		c.String(200, strings.Repeat("a", 1024))
+		c.String(200, strings.Repeat("b", 1024))
+	})
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, 200, w.Code)
+	assert.Equal(t, "gzip", w.Header().Get(headerContentEncoding))
+	assert.NotEqual(t, "2048", w.Header().Get("Content-Length"))
+	assert.Less(t, w.Body.Len(), 2048)
+}
+
+// Note this test intentionally triggers gzipping even when the actual response doesn't meet min length. This is because
+// we use the Content-Length header as the primary determinant of compression to avoid the cost of buffering.
+func TestMinLengthUsesContentLengthHeaderInsteadOfBuffering(t *testing.T) {
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/", nil)
+	req.Header.Add(headerAcceptEncoding, "gzip")
+
+	router := gin.New()
+	router.Use(Gzip(DefaultCompression, WithMinLength(2048)))
+	router.GET("/", func(c *gin.Context) {
+		c.Header("Content-Length", "2048")
+		c.String(200, testResponse)
+	})
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, 200, w.Code)
+	assert.Equal(t, "gzip", w.Header().Get(headerContentEncoding))
+	assert.NotEmpty(t, w.Header().Get("Content-Length"))
+	assert.NotEqual(t, "19", w.Header().Get("Content-Length"))
+}
+
+// Note this test intentionally does not trigger gzipping even when the actual response meets min length. This is
+// because we use the Content-Length header as the primary determinant of compression to avoid the cost of buffering.
+func TestMinLengthMultiWriteResponseUsesContentLengthHeaderInsteadOfBuffering(t *testing.T) {
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/", nil)
+	req.Header.Add(headerAcceptEncoding, "gzip")
+
+	router := gin.New()
+	router.Use(Gzip(DefaultCompression, WithMinLength(1024)))
+	router.GET("/", func(c *gin.Context) {
+		c.Header("Content-Length", "999")
+		c.String(200, strings.Repeat("a", 1024))
+		c.String(200, strings.Repeat("b", 1024))
+	})
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, 200, w.Code)
+	// no gzip since Content-Length doesn't meet min length 1024
+	assert.NotEqual(t, "gzip", w.Header().Get(headerContentEncoding))
+	assert.Equal(t, "2048", w.Header().Get("Content-Length"))
+}
+
+func TestMinLengthWithInvalidContentLengthHeader(t *testing.T) {
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/", nil)
+	req.Header.Add(headerAcceptEncoding, "gzip")
+
+	router := gin.New()
+	router.Use(Gzip(DefaultCompression, WithMinLength(2048)))
+	router.GET("/", func(c *gin.Context) {
+		c.Header("Content-Length", "xyz")
+		c.String(200, testResponse)
+	})
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, 200, w.Code)
+	assert.Equal(t, "", w.Header().Get(headerContentEncoding))
+	assert.Equal(t, "19", w.Header().Get("Content-Length"))
+}
+
+func TestFlush(t *testing.T) {
+	testC, _ := gin.CreateTestContext(httptest.NewRecorder())
+	gz := gzipWriter{
+		ResponseWriter: testC.Writer,
+		writer:         gzip.NewWriter(testC.Writer),
+	}
+	_, _ = gz.WriteString("test")
+	gz.Flush()
+	assert.True(t, gz.Written())
 }
 
 type hijackableResponse struct {
