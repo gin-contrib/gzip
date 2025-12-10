@@ -41,13 +41,14 @@ func (o optionFunc) apply(c *config) {
 }
 
 type config struct {
-	excludedExtensions     ExcludedExtensions
-	excludedPaths          ExcludedPaths
-	excludedPathesRegexs   ExcludedPathesRegexs
-	decompressFn           func(c *gin.Context)
-	decompressOnly         bool
-	customShouldCompressFn func(c *gin.Context) bool
-	minLength              int
+	excludedExtensions      ExcludedExtensions
+	excludedPaths           ExcludedPaths
+	excludedPathesRegexs    ExcludedPathesRegexs
+	decompressFn            func(c *gin.Context)
+	decompressOnly          bool
+	combineDefaultAndCustom bool
+	customShouldCompressFn  func(c *gin.Context) bool
+	minLength               int
 }
 
 // WithExcludedExtensions returns an Option that sets the ExcludedExtensions field of the Options struct.
@@ -93,6 +94,17 @@ func WithDecompressFn(decompressFn func(c *gin.Context)) Option {
 func WithDecompressOnly() Option {
 	return optionFunc(func(o *config) {
 		o.decompressOnly = true
+	})
+}
+
+// WithCombineDefaultAndCustom returns an Option that sets the CombineDefaultAndCustom field of the Options struct.
+// Parameters:
+//   - combine: bool - A boolean value to determine if the default compression logic should be combined with the custom logic.
+//     If set to true, both the default logic and the custom logic must return true for the response to be compressed.
+//     If set to false, the custom logic takes precedence over the default logic.
+func WithCombineDefaultAndCustom() Option {
+	return optionFunc(func(cfg *config) {
+		cfg.combineDefaultAndCustom = true
 	})
 }
 
