@@ -68,10 +68,24 @@ func (g *gzipHandler) Handle(c *gin.Context) {
 		fn(c)
 	}
 
-	if g.decompressOnly ||
-		(g.customShouldCompressFn != nil && !g.customShouldCompressFn(c)) ||
-		(g.customShouldCompressFn == nil && !g.shouldCompress(c.Request)) {
+	if g.decompressOnly {
 		return
+	}
+
+	if g.customShouldCompressFn != nil {
+		if g.combineDefaultAndCustom {
+			if !(g.customShouldCompressFn(c) && g.shouldCompress(c.Request)) {
+				return
+			}
+		} else {
+			if !g.customShouldCompressFn(c) {
+				return
+			}
+		}
+	} else {
+		if !g.shouldCompress(c.Request) {
+			return
+		}
 	}
 
 	gz := g.gzPool.Get().(*gzip.Writer)
