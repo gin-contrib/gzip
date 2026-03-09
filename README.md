@@ -176,6 +176,44 @@ func main() {
 }
 ```
 
+### Customized Should Compress Function
+
+```go
+package main
+
+import (
+	"net/http"
+
+	"github.com/gin-contrib/gzip"
+	"github.com/gin-gonic/gin"
+)
+
+func main() {
+	r := gin.Default()
+
+	// Custom logic:
+	//   Only compress responses when the request has header X-Allow-Compress: true
+	customFn := func(c *gin.Context) bool {
+		return c.GetHeader("X-Allow-Compress") == "true"
+	}
+
+	r.Use(gzip.Gzip(
+		gzip.DefaultCompression,
+		gzip.WithExcludedPaths([]string{"/api/"}),
+		gzip.WithExcludedPathsRegexs([]string{".*"}),
+		gzip.WithCustomShouldCompressFn(customFn),
+		gzip.WithCombineDefaultAndCustom(), // <-- combine default + custom rules
+	))
+
+	r.GET("/data", func(c *gin.Context) {
+		c.String(http.StatusOK, "compressed response data")
+	})
+
+	if err := r.Run(":8080"); err != nil {
+		panic(err)
+	}
+}
+```
 ### Server Push
 
 ```go
