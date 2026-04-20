@@ -139,7 +139,11 @@ func (g *gzipWriter) removeGzipHeaders() {
 }
 
 func (g *gzipWriter) Flush() {
-	_ = g.writer.Flush()
+	// gzip.Writer will flush a GZIP header even if it hasn't been written yet,
+	// so we shouldn't flush it if compression is not enabled.
+	if g.shouldCompress {
+		_ = g.writer.Flush()
+	}
 	g.ResponseWriter.Flush()
 }
 
