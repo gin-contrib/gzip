@@ -155,3 +155,44 @@ func TestHandle404NoCompression(t *testing.T) {
 		})
 	}
 }
+
+func TestHandle400AndFlushNoCompression(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	tests := []struct {
+		name           string
+		acceptEncoding string
+	}{
+		{
+			name:           "400 with gzip accept-encoding",
+			acceptEncoding: gzipEncoding,
+		},
+		{
+			name:           "400 without gzip accept-encoding",
+			acceptEncoding: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			router := gin.New()
+			router.Use(Gzip(DefaultCompression))
+			// Register a route to get proper 404 for unmatched paths
+			router.GET("/bad_request", func(c *gin.Context) {
+				c.String(http.StatusBadRequest, "400 bad request")
+				c.Writer.(http.Flusher).Flush()
+			})
+
+			req, _ := http.NewRequestWithContext(context.Background(), "GET", "/bad_request", nil)
+			if tt.acceptEncoding != "" {
+				req.Header.Set(headerAcceptEncoding, tt.acceptEncoding)
+			}
+
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+			assert.Equal(t, "400 bad request", w.Body.String())
+		})
+	}
+}
