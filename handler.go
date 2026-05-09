@@ -92,11 +92,12 @@ func (g *gzipHandler) Handle(c *gin.Context) {
 	c.Writer = gw
 	defer func() {
 		// Only close gzip writer if it was actually used (not for error responses)
-		if gw.status >= 400 {
+		switch {
+		case gw.status >= 400:
 			// Remove gzip headers for error responses when handler is complete
 			gw.removeGzipHeaders()
 			gz.Reset(io.Discard)
-		} else if !gw.shouldCompress {
+		case !gw.shouldCompress:
 			// if compression limit not met after all write commands were executed, then the response data is stored in the
 			// internal buffer which should now be written to the response writer directly
 			gw.Header().Del(headerContentEncoding)
@@ -104,7 +105,7 @@ func (g *gzipHandler) Handle(c *gin.Context) {
 			// must refer directly to embedded writer since c.Writer gets overridden
 			_, _ = gw.ResponseWriter.Write(gw.buffer.Bytes())
 			gz.Reset(io.Discard)
-		} else if c.Writer.Size() < 0 {
+		case c.Writer.Size() < 0:
 			// do not write gzip footer when nothing is written to the response body
 			// Note: This is only executed when gw.minLength == 0 (ie always compress)
 			gz.Reset(io.Discard)
