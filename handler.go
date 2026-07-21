@@ -85,9 +85,10 @@ func (g *gzipHandler) Handle(c *gin.Context) {
 		c.Header("ETag", "W/"+originalEtag)
 	}
 	gw := &gzipWriter{
-		ResponseWriter: c.Writer,
-		writer:         gz,
-		minLength:      g.minLength,
+		ResponseWriter:       c.Writer,
+		writer:               gz,
+		minLength:            g.minLength,
+		excludedContentTypes: g.excludedContentTypes,
 	}
 	c.Writer = gw
 	defer func() {
