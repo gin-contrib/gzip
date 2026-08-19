@@ -715,3 +715,63 @@ http_requests_total{method="get",status="400"} 3 1395066363000`
 		assert.Equal(t, prometheusData, w.Body.String(), "Uncompressed metrics should match original content")
 	}
 }
+
+// TestExcludedContentTypes verifies that responses whose Content-Type matches a
+// configured excluded prefix are passed through without gzip compression, while
+// other responses are still compressed (issue #42).
+func TestExcludedContentTypes(t *testing.T) {
+	tests := []struct {
+		name            string
+		contentType     string
+		body            string
+		wantCompression bool
+	}{
+		{"excluded exact image type", "image/jpeg", "\xff\xd8\xff fake jpeg bytes padded long enough", false},
+		{"excluded image family via prefix", "image/png", "\x89PNG fake png bytes padded to be long", false},
+		{"excluded with charset parameter", "image/svg+xml; charset=utf-8", "<svg>svg markup, long enough</svg>", false},
+		{"not excluded text type is compressed", "text/plain", strings.Repeat("compress me ", 20), true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			router := gin.New()
+			router.Use(Gzip(DefaultCompression, WithExcludedContentTypes([]string{"image/"})))
+			router.GET("/resource", func(c *gin.Context) {
+				c.Data(http.StatusOK, tt.contentType, []byte(tt.body))
+			})
+
+			req, _ := http.NewRequestWithContext(context.Background(), "GET", "/resource", nil)
+			req.Header.Add(headerAcceptEncoding, "gzip")
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, http.StatusOK, w.Code)
+			if tt.wantCompression {
+				assert.Equal(t, "gzip", w.Header().Get(headerContentEncoding))
+				gr, err := gzip.NewReader(w.Body)
+				require.NoError(t, err)
+				defer gr.Close()
+				body, err := io.ReadAll(gr)
+				require.NoError(t, err)
+				assert.Equal(t, tt.body, string(body))
+			} else {
+				assert.Empty(t, w.Header().Get(headerContentEncoding))
+				assert.Equal(t, tt.body, w.Body.String())
+			}
+		})
+	}
+}
+
+// TestExcludedContentTypesContains covers the prefix, case-insensitive and
+// parameter-stripping matching behavior of ExcludedContentTypes.
+func TestExcludedContentTypesContains(t *testing.T) {
+	e := NewExcludedContentTypes([]string{"image/", "Application/PDF"})
+
+	assert.True(t, e.Contains("image/jpeg"))
+	assert.True(t, e.Contains("image/png; charset=binary"))
+	assert.True(t, e.Contains("IMAGE/GIF")) // case-insensitive
+	assert.True(t, e.Contains("application/pdf"))
+	assert.False(t, e.Contains("text/plain"))
+	assert.False(t, e.Contains("")) // empty header
+	assert.False(t, ExcludedContentTypes(nil).Contains("image/jpeg"))
+}
