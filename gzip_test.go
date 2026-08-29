@@ -253,7 +253,7 @@ func TestDecompressGzip(t *testing.T) {
 	assert.Equal(t, "", w.Header().Get(headerContentEncoding))
 	assert.Equal(t, "", w.Header().Get(headerVary))
 	assert.Equal(t, testResponse, w.Body.String())
-	assert.Equal(t, "", w.Header().Get("Content-Length"))
+	assert.Equal(t, strconv.Itoa(len(testResponse)), w.Header().Get("Content-Length"))
 }
 
 func TestDecompressGzipWithEmptyBody(t *testing.T) {
@@ -327,7 +327,7 @@ func TestDecompressOnly(t *testing.T) {
 	assert.Equal(t, "", w.Header().Get(headerContentEncoding))
 	assert.Equal(t, "", w.Header().Get(headerVary))
 	assert.Equal(t, testResponse, w.Body.String())
-	assert.Equal(t, "", w.Header().Get("Content-Length"))
+	assert.Equal(t, strconv.Itoa(len(testResponse)), w.Header().Get("Content-Length"))
 }
 
 func TestGzipWithDecompressOnly(t *testing.T) {
