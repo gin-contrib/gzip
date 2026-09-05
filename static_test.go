@@ -1,11 +1,14 @@
 package gzip
 
 import (
+	"compress/gzip"
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -19,10 +22,12 @@ func TestStaticFileWithGzip(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	// Create a test file
+	// Create a test file. The content is repeated so that it is large and
+	// redundant enough for deflate to emit a compressed block; very short
+	// inputs may legitimately be stored uncompressed by newer Go versions.
 	testFile := filepath.Join(tmpDir, "test.txt")
-	testContent := "This is a test file for static gzip compression testing. " +
-		"It should be long enough to trigger gzip compression."
+	testContent := strings.Repeat("This is a test file for static gzip compression testing. "+
+		"It should be long enough to trigger gzip compression. ", 10)
 	err = os.WriteFile(testFile, []byte(testContent), 0o600)
 	require.NoError(t, err)
 
@@ -49,6 +54,14 @@ func TestStaticFileWithGzip(t *testing.T) {
 
 	// The compressed content should be smaller than original
 	assert.Less(t, w.Body.Len(), len(testContent), "Compressed content should be smaller")
+
+	// The body must be a valid gzip stream that decompresses to the original file
+	gr, err := gzip.NewReader(w.Body)
+	require.NoError(t, err)
+	defer gr.Close()
+	decompressed, err := io.ReadAll(gr)
+	require.NoError(t, err)
+	assert.Equal(t, testContent, string(decompressed), "Decompressed body should match the file content")
 }
 
 func TestStaticFileWithoutGzip(t *testing.T) {
