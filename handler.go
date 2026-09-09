@@ -16,6 +16,7 @@ const (
 	headerAcceptEncoding  = "Accept-Encoding"
 	headerContentEncoding = "Content-Encoding"
 	headerVary            = "Vary"
+	headerConnection      = "Connection"
 )
 
 type gzipHandler struct {
@@ -121,7 +122,7 @@ func (g *gzipHandler) Handle(c *gin.Context) {
 
 func (g *gzipHandler) shouldCompress(req *http.Request) bool {
 	if !strings.Contains(req.Header.Get(headerAcceptEncoding), "gzip") ||
-		strings.Contains(req.Header.Get("Connection"), "Upgrade") {
+		connectionHasUpgrade(req.Header) {
 		return false
 	}
 
@@ -134,4 +135,19 @@ func (g *gzipHandler) shouldCompress(req *http.Request) bool {
 	}
 
 	return true
+}
+
+// connectionHasUpgrade reports whether the Connection header lists the
+// "upgrade" token. Connection options are case-insensitive (RFC 7230 6.1,
+// RFC 6455 4.2.1) and proxies may lowercase them, so a plain substring match
+// for "Upgrade" misses WebSocket handshakes that the upgrader still accepts.
+func connectionHasUpgrade(header http.Header) bool {
+	for _, value := range header.Values(headerConnection) {
+		for _, token := range strings.Split(value, ",") {
+			if strings.EqualFold(strings.TrimSpace(token), "upgrade") {
+				return true
+			}
+		}
+	}
+	return false
 }
