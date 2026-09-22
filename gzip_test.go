@@ -715,3 +715,32 @@ http_requests_total{method="get",status="400"} 3 1395066363000`
 		assert.Equal(t, prometheusData, w.Body.String(), "Uncompressed metrics should match original content")
 	}
 }
+
+func TestNoGzipOnConnectionUpgrade(t *testing.T) {
+	tests := []struct {
+		name       string
+		connection string
+	}{
+		{"canonical", "Upgrade"},
+		{"lowercase", "upgrade"},
+		{"uppercase", "UPGRADE"},
+		{"list", "keep-alive, Upgrade"},
+		{"lowercase list", "keep-alive, upgrade"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req, _ := http.NewRequestWithContext(context.Background(), "GET", "/", nil)
+			req.Header.Add(headerAcceptEncoding, "gzip")
+			req.Header.Add("Connection", tt.connection)
+
+			w := httptest.NewRecorder()
+			r := newServer()
+			r.ServeHTTP(w, req)
+
+			assert.Equal(t, 200, w.Code)
+			assert.Equal(t, "", w.Header().Get(headerContentEncoding))
+			assert.Equal(t, testResponse, w.Body.String())
+		})
+	}
+}
