@@ -715,3 +715,43 @@ http_requests_total{method="get",status="400"} 3 1395066363000`
 		assert.Equal(t, prometheusData, w.Body.String(), "Uncompressed metrics should match original content")
 	}
 }
+
+// TestPanicStatusCode reproduces issue #140: when a handler panics, gin's
+// Recovery middleware sets a 500 status, but the gzip middleware used to flush
+// the response header with the default 200 before Recovery could run, so the
+// client saw 200 instead of 500.
+func TestPanicStatusCode(t *testing.T) {
+	router := gin.New()
+	router.Use(gin.Recovery())
+	router.Use(Gzip(DefaultCompression))
+	router.GET("/panic", func(_ *gin.Context) {
+		panic("boom")
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/panic", nil)
+	req.Header.Set("Accept-Encoding", "gzip")
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code,
+		"panic should yield 500, not the default 200")
+}
+
+// TestEmptyBodyStatusPreserved guards the fix for #140: a handler that sets an
+// explicit status with no body must still send that status (the empty buffer is
+// skipped, not written with a premature default status).
+func TestEmptyBodyStatusPreserved(t *testing.T) {
+	router := gin.New()
+	router.Use(Gzip(DefaultCompression))
+	router.GET("/no-content", func(c *gin.Context) {
+		c.Status(http.StatusNoContent) // 204, no body
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/no-content", nil)
+	req.Header.Set("Accept-Encoding", "gzip")
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNoContent, w.Code)
+	assert.Empty(t, w.Body.String())
+}

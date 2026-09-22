@@ -102,8 +102,15 @@ func (g *gzipHandler) Handle(c *gin.Context) {
 			// internal buffer which should now be written to the response writer directly
 			gw.Header().Del(headerContentEncoding)
 			gw.Header().Del(headerVary)
-			// must refer directly to embedded writer since c.Writer gets overridden
-			_, _ = gw.ResponseWriter.Write(gw.buffer.Bytes())
+			// Only flush the buffer when it actually holds data. Writing an empty
+			// buffer would force the response header to be committed with the
+			// current status. During panic unwinding this defer runs before gin's
+			// Recovery middleware sets 500, so an unconditional write would leak a
+			// premature 200 header and prevent Recovery from overriding it (#140).
+			if gw.buffer.Len() > 0 {
+				// must refer directly to embedded writer since c.Writer gets overridden
+				_, _ = gw.ResponseWriter.Write(gw.buffer.Bytes())
+			}
 			gz.Reset(io.Discard)
 		case c.Writer.Size() < 0:
 			// do not write gzip footer when nothing is written to the response body
