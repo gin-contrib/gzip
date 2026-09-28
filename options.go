@@ -247,14 +247,13 @@ func DefaultDecompressHandle(c *gin.Context) {
 
 	contentEncodingField := strings.Split(strings.ToLower(c.GetHeader("Content-Encoding")), ",")
 	if len(contentEncodingField) == 0 { // nothing to decompress
-		c.Next()
-
 		return
 	}
 
 	toClose := make([]io.Closer, 0, len(contentEncodingField))
 	defer func() {
-		for i := len(toClose); i > 0; i-- {
+		// Close readers in reverse order, except the top level one
+		for i := len(toClose); i > 1; i-- {
 			toClose[i-1].Close()
 		}
 	}()
@@ -292,6 +291,4 @@ func DefaultDecompressHandle(c *gin.Context) {
 
 	c.Request.Header.Del("Content-Encoding")
 	c.Request.Header.Del("Content-Length")
-
-	c.Next()
 }
