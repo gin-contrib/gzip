@@ -18,9 +18,7 @@ import (
 
 func TestStaticFileWithGzip(t *testing.T) {
 	// Create a temporary directory and file for testing
-	tmpDir, err := os.MkdirTemp("", "gzip_static_test")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Create a test file. The content is repeated so that it is large and
 	// redundant enough for deflate to emit a compressed block; very short
@@ -28,7 +26,7 @@ func TestStaticFileWithGzip(t *testing.T) {
 	testFile := filepath.Join(tmpDir, "test.txt")
 	testContent := strings.Repeat("This is a test file for static gzip compression testing. "+
 		"It should be long enough to trigger gzip compression. ", 10)
-	err = os.WriteFile(testFile, []byte(testContent), 0o600)
+	err := os.WriteFile(testFile, []byte(testContent), 0o600)
 	require.NoError(t, err)
 
 	// Set up Gin router with gzip middleware and static file serving
@@ -38,7 +36,12 @@ func TestStaticFileWithGzip(t *testing.T) {
 	router.Static("/static", tmpDir)
 
 	// Test static file request with gzip support
-	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/static/test.txt", nil)
+	req, _ := http.NewRequestWithContext(
+		context.Background(),
+		http.MethodGet,
+		"/static/test.txt",
+		nil,
+	)
 	req.Header.Add(headerAcceptEncoding, "gzip")
 
 	w := httptest.NewRecorder()
@@ -49,7 +52,12 @@ func TestStaticFileWithGzip(t *testing.T) {
 
 	// This is what should happen but currently fails due to the bug
 	// The static handler initially sets status to 404, causing gzip headers to be removed
-	assert.Equal(t, "gzip", w.Header().Get(headerContentEncoding), "Static file should be gzip compressed")
+	assert.Equal(
+		t,
+		"gzip",
+		w.Header().Get(headerContentEncoding),
+		"Static file should be gzip compressed",
+	)
 	assert.Equal(t, headerAcceptEncoding, w.Header().Get(headerVary), "Vary header should be set")
 
 	// The compressed content should be smaller than original
@@ -61,19 +69,22 @@ func TestStaticFileWithGzip(t *testing.T) {
 	defer gr.Close()
 	decompressed, err := io.ReadAll(gr)
 	require.NoError(t, err)
-	assert.Equal(t, testContent, string(decompressed), "Decompressed body should match the file content")
+	assert.Equal(
+		t,
+		testContent,
+		string(decompressed),
+		"Decompressed body should match the file content",
+	)
 }
 
 func TestStaticFileWithoutGzip(t *testing.T) {
 	// Create a temporary directory and file for testing
-	tmpDir, err := os.MkdirTemp("", "gzip_static_test")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Create a test file
 	testFile := filepath.Join(tmpDir, "test.txt")
 	testContent := "This is a test file."
-	err = os.WriteFile(testFile, []byte(testContent), 0o600)
+	err := os.WriteFile(testFile, []byte(testContent), 0o600)
 	require.NoError(t, err)
 
 	// Set up Gin router with gzip middleware and static file serving
@@ -83,7 +94,12 @@ func TestStaticFileWithoutGzip(t *testing.T) {
 	router.Static("/static", tmpDir)
 
 	// Test static file request without gzip support
-	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/static/test.txt", nil)
+	req, _ := http.NewRequestWithContext(
+		context.Background(),
+		http.MethodGet,
+		"/static/test.txt",
+		nil,
+	)
 	// No Accept-Encoding header
 
 	w := httptest.NewRecorder()
@@ -91,16 +107,14 @@ func TestStaticFileWithoutGzip(t *testing.T) {
 
 	// The response should be successful and not compressed
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "", w.Header().Get(headerContentEncoding), "Content should not be compressed")
-	assert.Equal(t, "", w.Header().Get(headerVary), "Vary header should not be set")
+	assert.Empty(t, w.Header().Get(headerContentEncoding), "Content should not be compressed")
+	assert.Empty(t, w.Header().Get(headerVary), "Vary header should not be set")
 	assert.Equal(t, testContent, w.Body.String(), "Content should match original")
 }
 
 func TestStaticFileNotFound(t *testing.T) {
 	// Create a temporary directory (but no files)
-	tmpDir, err := os.MkdirTemp("", "gzip_static_test")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Set up Gin router with gzip middleware and static file serving
 	gin.SetMode(gin.TestMode)
@@ -109,7 +123,12 @@ func TestStaticFileNotFound(t *testing.T) {
 	router.Static("/static", tmpDir)
 
 	// Test request for non-existent file
-	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/static/nonexistent.txt", nil)
+	req, _ := http.NewRequestWithContext(
+		context.Background(),
+		http.MethodGet,
+		"/static/nonexistent.txt",
+		nil,
+	)
 	req.Header.Add(headerAcceptEncoding, "gzip")
 
 	w := httptest.NewRecorder()
@@ -117,19 +136,25 @@ func TestStaticFileNotFound(t *testing.T) {
 
 	// The response should be 404 and not compressed (this should work correctly)
 	assert.Equal(t, http.StatusNotFound, w.Code)
-	assert.Equal(t, "", w.Header().Get(headerContentEncoding), "404 response should not be compressed")
-	assert.Equal(t, "", w.Header().Get(headerVary), "Vary header should be removed for error responses")
+	assert.Empty(
+		t,
+		w.Header().Get(headerContentEncoding),
+		"404 response should not be compressed",
+	)
+	assert.Empty(
+		t,
+		w.Header().Get(headerVary),
+		"Vary header should be removed for error responses",
+	)
 }
 
 func TestStaticDirectoryListing(t *testing.T) {
 	// Create a temporary directory with a file
-	tmpDir, err := os.MkdirTemp("", "gzip_static_test")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Create a test file
 	testFile := filepath.Join(tmpDir, "test.txt")
-	err = os.WriteFile(testFile, []byte("test content"), 0o600)
+	err := os.WriteFile(testFile, []byte("test content"), 0o600)
 	require.NoError(t, err)
 
 	// Set up Gin router with gzip middleware and static file serving
@@ -139,7 +164,7 @@ func TestStaticDirectoryListing(t *testing.T) {
 	router.Static("/static", tmpDir)
 
 	// Test directory listing request
-	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/static/", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/static/", nil)
 	req.Header.Add(headerAcceptEncoding, "gzip")
 
 	w := httptest.NewRecorder()
@@ -148,21 +173,27 @@ func TestStaticDirectoryListing(t *testing.T) {
 	// Note: Gin's default static handler doesn't enable directory listing
 	// so this will return 404, which should NOT be compressed
 	assert.Equal(t, http.StatusNotFound, w.Code)
-	assert.Equal(t, "", w.Header().Get(headerContentEncoding), "404 response should not be compressed")
-	assert.Equal(t, "", w.Header().Get(headerVary), "Vary header should be removed for error responses")
+	assert.Empty(
+		t,
+		w.Header().Get(headerContentEncoding),
+		"404 response should not be compressed",
+	)
+	assert.Empty(
+		t,
+		w.Header().Get(headerVary),
+		"Vary header should be removed for error responses",
+	)
 }
 
 // This test demonstrates the specific issue mentioned in #122
 func TestStaticFileGzipHeadersBug(t *testing.T) {
 	// Create a temporary directory and file for testing
-	tmpDir, err := os.MkdirTemp("", "gzip_static_test")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Create a test file
 	testFile := filepath.Join(tmpDir, "test.js")
 	testContent := "console.log('This is a JavaScript file that should be compressed when served as a static file');"
-	err = os.WriteFile(testFile, []byte(testContent), 0o600)
+	err := os.WriteFile(testFile, []byte(testContent), 0o600)
 	require.NoError(t, err)
 
 	// Set up Gin router with gzip middleware and static file serving
@@ -172,7 +203,12 @@ func TestStaticFileGzipHeadersBug(t *testing.T) {
 	router.Static("/assets", tmpDir)
 
 	// Test static file request with gzip support
-	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/assets/test.js", nil)
+	req, _ := http.NewRequestWithContext(
+		context.Background(),
+		http.MethodGet,
+		"/assets/test.js",
+		nil,
+	)
 	req.Header.Add(headerAcceptEncoding, "gzip")
 
 	w := httptest.NewRecorder()
@@ -193,8 +229,11 @@ func TestStaticFileGzipHeadersBug(t *testing.T) {
 	// - Vary header will be empty instead of "Accept-Encoding"
 	// - Content will not be compressed
 	if w.Header().Get(headerContentEncoding) != gzipEncoding {
-		t.Errorf("BUG REPRODUCED: Static file is not being gzip compressed. Content-Encoding: %q, expected: %q",
-			w.Header().Get(headerContentEncoding), gzipEncoding)
+		t.Errorf(
+			"BUG REPRODUCED: Static file is not being gzip compressed. Content-Encoding: %q, expected: %q",
+			w.Header().Get(headerContentEncoding),
+			gzipEncoding,
+		)
 	}
 
 	if w.Header().Get(headerVary) != headerAcceptEncoding {

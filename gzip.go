@@ -59,7 +59,9 @@ func (g *gzipWriter) Write(data []byte) (int, error) {
 
 	// Check if response is already gzip-compressed by looking at Content-Encoding header
 	// If upstream handler already set gzip encoding, pass through without double compression
-	if contentEncoding := g.Header().Get("Content-Encoding"); contentEncoding != "" && contentEncoding != gzipEncoding {
+	if contentEncoding := g.Header().
+		Get("Content-Encoding"); contentEncoding != "" &&
+		contentEncoding != gzipEncoding {
 		// Different encoding, remove our gzip headers and pass through
 		g.removeGzipHeaders()
 		return g.ResponseWriter.Write(data)

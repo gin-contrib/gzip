@@ -47,7 +47,7 @@ func newGzipHandler(level int, opts ...Option) *gzipHandler {
 	handler := &gzipHandler{
 		config: cfg,
 		gzPool: sync.Pool{
-			New: func() interface{} {
+			New: func() any {
 				gz, _ := gzip.NewWriterLevel(io.Discard, level)
 				return gz
 			},
@@ -64,7 +64,8 @@ func newGzipHandler(level int, opts ...Option) *gzipHandler {
 // and wraps the response writer with a gzipWriter. After the request is processed, it ensures the gzip.Writer
 // is properly closed and the "Content-Length" header is set based on the response size.
 func (g *gzipHandler) Handle(c *gin.Context) {
-	if fn := g.decompressFn; fn != nil && strings.Contains(c.Request.Header.Get("Content-Encoding"), "gzip") {
+	if fn := g.decompressFn; fn != nil &&
+		strings.Contains(c.Request.Header.Get("Content-Encoding"), "gzip") {
 		fn(c)
 	}
 

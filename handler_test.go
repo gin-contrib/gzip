@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestHandleGzip(t *testing.T) {
@@ -47,7 +48,7 @@ func TestHandleGzip(t *testing.T) {
 				c.String(http.StatusOK, "Gzip Test Response")
 			})
 
-			req, _ := http.NewRequestWithContext(context.Background(), "GET", tt.path, nil)
+			req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, tt.path, nil)
 			req.Header.Set(headerAcceptEncoding, tt.acceptEncoding)
 
 			w := httptest.NewRecorder()
@@ -58,7 +59,7 @@ func TestHandleGzip(t *testing.T) {
 
 			if tt.expectedContentEncoding == gzipEncoding {
 				gr, err := gzip.NewReader(w.Body)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				defer gr.Close()
 
 				body, _ := io.ReadAll(gr)
@@ -85,12 +86,12 @@ func TestHandleDecompressGzip(t *testing.T) {
 	router.Use(Gzip(DefaultCompression, WithDecompressFn(DefaultDecompressHandle)))
 	router.POST("/", func(c *gin.Context) {
 		data, err := c.GetRawData()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, "Gzip Test Response", string(data))
 		c.String(http.StatusOK, "ok")
 	})
 
-	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/", buf)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/", buf)
 	req.Header.Set("Content-Encoding", gzipEncoding)
 
 	w := httptest.NewRecorder()
@@ -129,7 +130,12 @@ func TestHandle404NoCompression(t *testing.T) {
 				c.String(http.StatusNotFound, "404 page not found")
 			})
 
-			req, _ := http.NewRequestWithContext(context.Background(), "GET", "/nonexistent", nil)
+			req, _ := http.NewRequestWithContext(
+				context.Background(),
+				http.MethodGet,
+				"/nonexistent",
+				nil,
+			)
 			if tt.acceptEncoding != "" {
 				req.Header.Set(headerAcceptEncoding, tt.acceptEncoding)
 			}
@@ -144,13 +150,21 @@ func TestHandle404NoCompression(t *testing.T) {
 			if tt.expectedGzip {
 				assert.Equal(t, gzipEncoding, contentEncoding)
 			} else {
-				assert.Empty(t, contentEncoding, "404 responses should not have Content-Encoding: gzip")
+				assert.Empty(
+					t,
+					contentEncoding,
+					"404 responses should not have Content-Encoding: gzip",
+				)
 			}
 
 			// Verify that Vary header is also not set for uncompressed 404 responses
 			if !tt.expectedGzip {
 				vary := w.Header().Get("Vary")
-				assert.Empty(t, vary, "404 responses should not have Vary header when not compressed")
+				assert.Empty(
+					t,
+					vary,
+					"404 responses should not have Vary header when not compressed",
+				)
 			}
 		})
 	}
