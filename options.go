@@ -262,7 +262,7 @@ func DefaultDecompressHandle(c *gin.Context) {
 	// parses multiply gzips like
 	// Content-Encoding: gzip, gzip, gzip
 	// allowed by RFC
-	for i := 0; i < len(contentEncodingField); i++ {
+	for i := range contentEncodingField {
 		trimmedValue := strings.TrimSpace(contentEncodingField[i])
 
 		if trimmedValue == "" {

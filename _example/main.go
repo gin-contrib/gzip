@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gin-contrib/gzip"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -19,7 +20,8 @@ func main() {
 		gzip.Gzip(
 			gzip.DefaultCompression,
 			gzip.WithExcludedPaths([]string{"/ping2"}),
-		))
+		),
+	)
 
 	r.GET("/ping", func(c *gin.Context) {
 		c.String(http.StatusOK, "pong "+fmt.Sprint(time.Now().Unix()))
