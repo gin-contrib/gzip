@@ -89,22 +89,17 @@ func (g *gzipWriter) Write(data []byte) (int, error) {
 		}
 	}
 
-	// Handle buffering here if Content-Length value couldn't tell us whether to gzip
-	//
-	// Check if the response body is large enough to be compressed.
-	// - If so, skip this condition and proceed with the normal write process.
-	// - If not, store the data in the buffer (in case more data is written in future Write calls).
-	// (At the end, if the response body is still too small, the caller should check shouldCompress and
-	// use the data stored in the buffer to write the response instead.)
-	if !g.shouldCompress && len(data) >= g.minLength {
-		g.shouldCompress = true
-	} else if !g.shouldCompress {
-		lenWritten, err := g.buffer.Write(data)
-		if err != nil || g.buffer.Len() < g.minLength {
-			return lenWritten, err
+	if !g.shouldCompress && g.buffer.Len()+len(data) < g.minLength {
+		return g.buffer.Write(data)
+	}
+	g.shouldCompress = true
+
+	// Drain prior data separately so Write only counts the current input.
+	if g.buffer.Len() > 0 {
+		if _, err := g.writer.Write(g.buffer.Bytes()); err != nil {
+			return 0, err
 		}
-		g.shouldCompress = true
-		data = g.buffer.Bytes()
+		g.buffer.Reset()
 	}
 
 	return g.writer.Write(data)
