@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -461,6 +462,163 @@ func TestMinLengthMultiWriteResponse(t *testing.T) {
 	assert.Equal(t, "gzip", w.Header().Get(headerContentEncoding))
 	assert.NotEqual(t, "2048", w.Header().Get("Content-Length"))
 	assert.Less(t, w.Body.Len(), 2048)
+}
+
+func TestMinLengthMultiWriteContents(t *testing.T) {
+	tests := []struct {
+		name   string
+		chunks []string
+	}{
+		{"large second write", []string{"first", "0123456789"}},
+		{"larger second write", []string{"first", "0123456789abcdef"}},
+		{"two small writes", []string{"first", "later"}},
+		{"several small writes", []string{"one", "two", "three"}},
+		{"write after compression starts", []string{"first", "0123456789", "last"}},
+		{"empty intermediate write", []string{"first", "", "0123456789"}},
+		{"below minimum", []string{"one", "two"}},
+		{"single large write", []string{"0123456789"}},
+	}
+
+	for _, tt := range tests {
+		for _, writeString := range []bool{false, true} {
+			name := tt.name + "/bytes"
+			if writeString {
+				name = tt.name + "/string"
+			}
+			t.Run(name, func(t *testing.T) {
+				router := gin.New()
+				router.Use(Gzip(DefaultCompression, WithMinLength(10)))
+				router.GET("/", func(c *gin.Context) {
+					for _, chunk := range tt.chunks {
+						var n int
+						var err error
+						if writeString {
+							n, err = c.Writer.WriteString(chunk)
+						} else {
+							n, err = c.Writer.Write([]byte(chunk))
+						}
+						require.NoError(t, err)
+						assert.Equal(t, len(chunk), n)
+					}
+				})
+
+				req := httptest.NewRequest(http.MethodGet, "/", nil)
+				req.Header.Set(headerAcceptEncoding, "gzip")
+				w := httptest.NewRecorder()
+				router.ServeHTTP(w, req)
+
+				expected := strings.Join(tt.chunks, "")
+				assert.Equal(t, http.StatusOK, w.Code)
+				if len(expected) < 10 {
+					assert.Empty(t, w.Header().Get(headerContentEncoding))
+					assert.Equal(t, expected, w.Body.String())
+					return
+				}
+				assert.Equal(t, "gzip", w.Header().Get(headerContentEncoding))
+				gr, err := gzip.NewReader(w.Body)
+				require.NoError(t, err)
+				defer gr.Close()
+				body, err := io.ReadAll(gr)
+				require.NoError(t, err)
+				assert.Equal(t, expected, string(body))
+			})
+		}
+	}
+}
+
+func TestMinLengthBufferedTransition(t *testing.T) {
+	for _, setContentLength := range []bool{false, true} {
+		name := "flush after compression"
+		if setContentLength {
+			name = "content length after buffering"
+		}
+		t.Run(name, func(t *testing.T) {
+			router := gin.New()
+			router.Use(Gzip(DefaultCompression, WithMinLength(10)))
+			router.GET("/", func(c *gin.Context) {
+				n, err := c.Writer.WriteString("first")
+				require.NoError(t, err)
+				assert.Equal(t, 5, n)
+				if setContentLength {
+					c.Header("Content-Length", "19")
+				}
+				n, err = c.Writer.WriteString("0123456789")
+				require.NoError(t, err)
+				assert.Equal(t, 10, n)
+				if !setContentLength {
+					c.Writer.Flush()
+				}
+				n, err = c.Writer.WriteString("last")
+				require.NoError(t, err)
+				assert.Equal(t, 4, n)
+			})
+
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req.Header.Set(headerAcceptEncoding, "gzip")
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			gr, err := gzip.NewReader(w.Body)
+			require.NoError(t, err)
+			defer gr.Close()
+			body, err := io.ReadAll(gr)
+			require.NoError(t, err)
+			assert.Equal(t, "first0123456789last", string(body))
+		})
+	}
+}
+
+type failingGzipOutput struct {
+	err error
+}
+
+func (w failingGzipOutput) Write([]byte) (int, error) {
+	return 0, w.err
+}
+
+func TestMinLengthBufferedWriteError(t *testing.T) {
+	failure := errors.New("output failure")
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	gw := &gzipWriter{
+		ResponseWriter: c.Writer,
+		writer:         gzip.NewWriter(failingGzipOutput{err: failure}),
+		minLength:      10,
+	}
+
+	n, err := gw.Write([]byte("first"))
+	require.NoError(t, err)
+	assert.Equal(t, 5, n)
+	n, err = gw.Write([]byte("later"))
+	require.ErrorIs(t, err, failure)
+	assert.Zero(t, n)
+	n, err = gw.Write([]byte("last"))
+	require.ErrorIs(t, err, failure)
+	assert.Zero(t, n)
+}
+
+func TestMinLengthCopy(t *testing.T) {
+	router := gin.New()
+	router.Use(Gzip(DefaultCompression, WithMinLength(10)))
+	router.GET("/", func(c *gin.Context) {
+		n, err := io.Copy(
+			c.Writer,
+			io.MultiReader(strings.NewReader("first"), strings.NewReader("later")),
+		)
+		require.NoError(t, err)
+		assert.Equal(t, int64(10), n)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set(headerAcceptEncoding, "gzip")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	gr, err := gzip.NewReader(w.Body)
+	require.NoError(t, err)
+	defer gr.Close()
+	body, err := io.ReadAll(gr)
+	require.NoError(t, err)
+	assert.Equal(t, "firstlater", string(body))
 }
 
 // Note this test intentionally triggers gzipping even when the actual response doesn't meet min length. This is because
