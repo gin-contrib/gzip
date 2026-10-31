@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-contrib/gzip"
@@ -24,15 +25,15 @@ func main() {
 	)
 
 	r.GET("/ping", func(c *gin.Context) {
-		c.String(http.StatusOK, "pong "+fmt.Sprint(time.Now().Unix()))
+		c.String(http.StatusOK, "pong "+strconv.FormatInt(time.Now().Unix(), 10))
 	})
 	r.GET("/ping2", func(c *gin.Context) {
-		c.String(http.StatusOK, "pong "+fmt.Sprint(time.Now().Unix()))
+		c.String(http.StatusOK, "pong "+strconv.FormatInt(time.Now().Unix(), 10))
 	})
 	r.GET("/stream", func(c *gin.Context) {
 		c.Header("Content-Type", "text/event-stream")
 		c.Header("Connection", "keep-alive")
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			fmt.Fprintf(c.Writer, "id: %d\ndata: tick %d\n\n", i, time.Now().Unix())
 			c.Writer.Flush()
 			time.Sleep(1 * time.Second)
