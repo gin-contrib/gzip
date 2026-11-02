@@ -30,6 +30,8 @@ type gzipWriter struct {
 	writer        *gzip.Writer
 	statusWritten bool
 	status        int
+	// excludedContentTypes holds response Content-Type prefixes that must not be compressed
+	excludedContentTypes ExcludedContentTypes
 	// minLength is the minimum length of the response body (in bytes) to enable compression
 	minLength int
 	// shouldCompress indicates whether the minimum length for compression has been met
@@ -53,6 +55,12 @@ func (g *gzipWriter) Write(data []byte) (int, error) {
 	// For error responses (4xx, 5xx), don't compress
 	// Always check the current status, even if WriteHeader was called
 	if g.status >= 400 {
+		g.removeGzipHeaders()
+		return g.ResponseWriter.Write(data)
+	}
+
+	// If the response Content-Type is excluded, pass through without compression.
+	if g.excludedContentTypes.Contains(g.Header().Get("Content-Type")) {
 		g.removeGzipHeaders()
 		return g.ResponseWriter.Write(data)
 	}

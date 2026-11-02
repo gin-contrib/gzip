@@ -44,6 +44,7 @@ type config struct {
 	excludedExtensions     ExcludedExtensions
 	excludedPaths          ExcludedPaths
 	excludedPathesRegexs   ExcludedPathesRegexs
+	excludedContentTypes   ExcludedContentTypes
 	decompressFn           func(c *gin.Context)
 	decompressOnly         bool
 	customShouldCompressFn func(c *gin.Context) bool
@@ -74,6 +75,29 @@ func WithExcludedPaths(args []string) Option {
 func WithExcludedPathsRegexs(args []string) Option {
 	return optionFunc(func(o *config) {
 		o.excludedPathesRegexs = NewExcludedPathesRegexs(args)
+	})
+}
+
+// WithExcludedContentTypes returns an Option that excludes responses from gzip
+// compression based on their Content-Type response header.
+//
+// Each argument is matched as a prefix against the response media type (the part
+// of the Content-Type header before any ";" parameters, compared
+// case-insensitively). This makes it possible to exclude a whole family of types
+// (e.g. "image/" for every image) or a single type (e.g. "image/jpeg").
+//
+// Note: the match relies on the Content-Type header set by the handler. If a
+// handler writes a body without setting Content-Type, no exclusion is applied.
+//
+// Parameters:
+//   - args: []string - Content-Type prefixes to exclude from gzip compression.
+//
+// Example:
+//
+//	router.Use(gzip.Gzip(gzip.DefaultCompression, gzip.WithExcludedContentTypes([]string{"image/", "video/"})))
+func WithExcludedContentTypes(args []string) Option {
+	return optionFunc(func(o *config) {
+		o.excludedContentTypes = NewExcludedContentTypes(args)
 	})
 }
 
@@ -170,6 +194,50 @@ func NewExcludedExtensions(extensions []string) ExcludedExtensions {
 func (e ExcludedExtensions) Contains(target string) bool {
 	_, ok := e[target]
 	return ok
+}
+
+// ExcludedContentTypes holds the response Content-Type prefixes that should be
+// excluded from gzip compression. Entries are stored lowercased for
+// case-insensitive matching.
+type ExcludedContentTypes []string
+
+// NewExcludedContentTypes creates a new ExcludedContentTypes from a slice of
+// Content-Type prefixes. Each entry is lowercased so matching is
+// case-insensitive.
+//
+// Parameters:
+//   - contentTypes: []string - A slice of Content-Type prefixes to exclude.
+//
+// Returns:
+//   - ExcludedContentTypes - The normalized set of excluded Content-Type prefixes.
+func NewExcludedContentTypes(contentTypes []string) ExcludedContentTypes {
+	res := make(ExcludedContentTypes, len(contentTypes))
+	for i, ct := range contentTypes {
+		res[i] = strings.ToLower(strings.TrimSpace(ct))
+	}
+	return res
+}
+
+// Contains reports whether the given Content-Type header value matches any of
+// the excluded prefixes. The media type (the part before any ";" parameters) is
+// compared case-insensitively against each excluded prefix.
+//
+// Parameters:
+//   - contentType: string - The response Content-Type header value to check.
+//
+// Returns:
+//   - bool - True if the response should be excluded from compression.
+func (e ExcludedContentTypes) Contains(contentType string) bool {
+	if len(e) == 0 || contentType == "" {
+		return false
+	}
+	mediaType := strings.ToLower(strings.TrimSpace(strings.SplitN(contentType, ";", 2)[0]))
+	for _, ct := range e {
+		if ct != "" && strings.HasPrefix(mediaType, ct) {
+			return true
+		}
+	}
+	return false
 }
 
 type ExcludedPaths []string

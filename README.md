@@ -175,6 +175,37 @@ func main() {
 }
 ```
 
+### Customized Excluded Content Types
+
+Skip compression based on the response `Content-Type`. Each argument is matched
+as a prefix against the response media type (case-insensitively), so `"image/"`
+excludes every image type while `"image/jpeg"` excludes only JPEGs.
+
+```go
+package main
+
+import (
+  "log"
+  "net/http"
+
+  "github.com/gin-contrib/gzip"
+  "github.com/gin-gonic/gin"
+)
+
+func main() {
+  r := gin.Default()
+  r.Use(gzip.Gzip(gzip.DefaultCompression, gzip.WithExcludedContentTypes([]string{"image/", "video/"})))
+  r.GET("/image", func(c *gin.Context) {
+    c.Data(http.StatusOK, "image/jpeg", someJPEGBytes)
+  })
+
+  // Listen and Server in 0.0.0.0:8080
+  if err := r.Run(":8080"); err != nil {
+    log.Fatal(err)
+  }
+}
+```
+
 ### Server Push
 
 ```go
