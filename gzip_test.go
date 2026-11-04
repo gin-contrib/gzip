@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
-	"context"
 	"fmt"
 	"io"
 	"net"
@@ -73,7 +72,7 @@ func newServer() *gin.Engine {
 }
 
 func TestVaryHeader(t *testing.T) {
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/ping", nil)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "/ping", nil)
 	req.Header.Add(headerAcceptEncoding, "gzip")
 
 	w := httptest.NewRecorder()
@@ -96,7 +95,7 @@ func TestVaryHeader(t *testing.T) {
 }
 
 func TestGzip(t *testing.T) {
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil)
 	req.Header.Add(headerAcceptEncoding, "gzip")
 
 	w := httptest.NewRecorder()
@@ -119,7 +118,7 @@ func TestGzip(t *testing.T) {
 }
 
 func TestGzipPNG(t *testing.T) {
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/image.png", nil)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "/image.png", nil)
 	req.Header.Add(headerAcceptEncoding, "gzip")
 
 	router := gin.New()
@@ -162,7 +161,7 @@ func TestExcludedPathsAndExtensions(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, tt.path, nil)
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, tt.path, nil)
 		req.Header.Add(headerAcceptEncoding, "gzip")
 
 		router := gin.New()
@@ -183,7 +182,7 @@ func TestExcludedPathsAndExtensions(t *testing.T) {
 }
 
 func TestNoGzip(t *testing.T) {
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil)
 
 	w := httptest.NewRecorder()
 	r := newServer()
@@ -196,7 +195,7 @@ func TestNoGzip(t *testing.T) {
 }
 
 func TestGzipWithReverseProxy(t *testing.T) {
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/reverse", nil)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "/reverse", nil)
 	req.Header.Add(headerAcceptEncoding, "gzip")
 
 	w := newCloseNotifyingRecorder()
@@ -227,7 +226,7 @@ func TestDecompressGzip(t *testing.T) {
 	}
 	gz.Close()
 
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/", buf)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, "/", buf)
 	req.Header.Add(headerContentEncoding, "gzip")
 
 	router := gin.New()
@@ -257,7 +256,7 @@ func TestDecompressGzip(t *testing.T) {
 }
 
 func TestDecompressGzipWithEmptyBody(t *testing.T) {
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/", nil)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, "/", nil)
 	req.Header.Add(headerContentEncoding, "gzip")
 
 	router := gin.New()
@@ -278,7 +277,7 @@ func TestDecompressGzipWithEmptyBody(t *testing.T) {
 
 func TestDecompressGzipWithIncorrectData(t *testing.T) {
 	req, _ := http.NewRequestWithContext(
-		context.Background(),
+		t.Context(),
 		http.MethodPost,
 		"/",
 		bytes.NewReader([]byte(testResponse)),
@@ -306,7 +305,7 @@ func TestDecompressOnly(t *testing.T) {
 	}
 	gz.Close()
 
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/", buf)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, "/", buf)
 	req.Header.Add(headerContentEncoding, "gzip")
 
 	router := gin.New()
@@ -344,7 +343,7 @@ func TestGzipWithDecompressOnly(t *testing.T) {
 	}
 	gz.Close()
 
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/", buf)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, "/", buf)
 	req.Header.Add(headerContentEncoding, "gzip")
 	req.Header.Add(headerAcceptEncoding, "gzip")
 
@@ -370,7 +369,7 @@ func TestGzipWithDecompressOnly(t *testing.T) {
 }
 
 func TestCustomShouldCompressFn(t *testing.T) {
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil)
 	req.Header.Add(headerAcceptEncoding, "gzip")
 
 	router := gin.New()
@@ -406,7 +405,7 @@ func TestMinLengthInvalidValue(t *testing.T) {
 }
 
 func TestMinLengthShortResponse(t *testing.T) {
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil)
 	req.Header.Add(headerAcceptEncoding, "gzip")
 
 	router := gin.New()
@@ -425,7 +424,7 @@ func TestMinLengthShortResponse(t *testing.T) {
 }
 
 func TestMinLengthLongResponse(t *testing.T) {
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil)
 	req.Header.Add(headerAcceptEncoding, "gzip")
 
 	router := gin.New()
@@ -444,7 +443,7 @@ func TestMinLengthLongResponse(t *testing.T) {
 }
 
 func TestMinLengthMultiWriteResponse(t *testing.T) {
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil)
 	req.Header.Add(headerAcceptEncoding, "gzip")
 
 	router := gin.New()
@@ -466,7 +465,7 @@ func TestMinLengthMultiWriteResponse(t *testing.T) {
 // Note this test intentionally triggers gzipping even when the actual response doesn't meet min length. This is because
 // we use the Content-Length header as the primary determinant of compression to avoid the cost of buffering.
 func TestMinLengthUsesContentLengthHeaderInsteadOfBuffering(t *testing.T) {
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil)
 	req.Header.Add(headerAcceptEncoding, "gzip")
 
 	router := gin.New()
@@ -488,7 +487,7 @@ func TestMinLengthUsesContentLengthHeaderInsteadOfBuffering(t *testing.T) {
 // Note this test intentionally does not trigger gzipping even when the actual response meets min length. This is
 // because we use the Content-Length header as the primary determinant of compression to avoid the cost of buffering.
 func TestMinLengthMultiWriteResponseUsesContentLengthHeaderInsteadOfBuffering(t *testing.T) {
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil)
 	req.Header.Add(headerAcceptEncoding, "gzip")
 
 	router := gin.New()
@@ -509,7 +508,7 @@ func TestMinLengthMultiWriteResponseUsesContentLengthHeaderInsteadOfBuffering(t 
 }
 
 func TestMinLengthWithInvalidContentLengthHeader(t *testing.T) {
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil)
 	req.Header.Add(headerAcceptEncoding, "gzip")
 
 	router := gin.New()
@@ -557,7 +556,7 @@ func (h *hijackableResponse) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 }
 
 func TestResponseWriterHijack(t *testing.T) {
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil)
 	req.Header.Add(headerAcceptEncoding, "gzip")
 
 	router := gin.New()
@@ -618,7 +617,7 @@ func TestDoubleGzipCompression(t *testing.T) {
 	})
 
 	// Make request through the proxy
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/proxy", nil)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "/proxy", nil)
 	req.Header.Add(headerAcceptEncoding, "gzip")
 
 	w := newCloseNotifyingRecorder()
@@ -697,7 +696,7 @@ http_requests_total{method="get",status="400"} 3 1395066363000`
 	})
 
 	// Simulate Prometheus scraper request
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/metrics", nil)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "/metrics", nil)
 	req.Header.Add(headerAcceptEncoding, "gzip")
 	req.Header.Add("User-Agent", "Prometheus/2.37.0")
 

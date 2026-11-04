@@ -2,7 +2,6 @@ package gzip
 
 import (
 	"compress/gzip"
-	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -37,7 +36,7 @@ func TestStaticFileWithGzip(t *testing.T) {
 
 	// Test static file request with gzip support
 	req, _ := http.NewRequestWithContext(
-		context.Background(),
+		t.Context(),
 		http.MethodGet,
 		"/static/test.txt",
 		nil,
@@ -95,7 +94,7 @@ func TestStaticFileWithoutGzip(t *testing.T) {
 
 	// Test static file request without gzip support
 	req, _ := http.NewRequestWithContext(
-		context.Background(),
+		t.Context(),
 		http.MethodGet,
 		"/static/test.txt",
 		nil,
@@ -124,7 +123,7 @@ func TestStaticFileNotFound(t *testing.T) {
 
 	// Test request for non-existent file
 	req, _ := http.NewRequestWithContext(
-		context.Background(),
+		t.Context(),
 		http.MethodGet,
 		"/static/nonexistent.txt",
 		nil,
@@ -164,7 +163,7 @@ func TestStaticDirectoryListing(t *testing.T) {
 	router.Static("/static", tmpDir)
 
 	// Test directory listing request
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/static/", nil)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "/static/", nil)
 	req.Header.Add(headerAcceptEncoding, "gzip")
 
 	w := httptest.NewRecorder()
@@ -204,7 +203,7 @@ func TestStaticFileGzipHeadersBug(t *testing.T) {
 
 	// Test static file request with gzip support
 	req, _ := http.NewRequestWithContext(
-		context.Background(),
+		t.Context(),
 		http.MethodGet,
 		"/assets/test.js",
 		nil,
