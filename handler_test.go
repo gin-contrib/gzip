@@ -3,7 +3,6 @@ package gzip
 import (
 	"bytes"
 	"compress/gzip"
-	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -48,7 +47,7 @@ func TestHandleGzip(t *testing.T) {
 				c.String(http.StatusOK, "Gzip Test Response")
 			})
 
-			req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, tt.path, nil)
+			req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, tt.path, nil)
 			req.Header.Set(headerAcceptEncoding, tt.acceptEncoding)
 
 			w := httptest.NewRecorder()
@@ -91,7 +90,7 @@ func TestHandleDecompressGzip(t *testing.T) {
 		c.String(http.StatusOK, "ok")
 	})
 
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/", buf)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, "/", buf)
 	req.Header.Set("Content-Encoding", gzipEncoding)
 
 	w := httptest.NewRecorder()
@@ -131,7 +130,7 @@ func TestHandle404NoCompression(t *testing.T) {
 			})
 
 			req, _ := http.NewRequestWithContext(
-				context.Background(),
+				t.Context(),
 				http.MethodGet,
 				"/nonexistent",
 				nil,
